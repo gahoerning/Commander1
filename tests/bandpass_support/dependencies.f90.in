@@ -1,0 +1,102 @@
+! Single-process stand-ins for external HEALPix/MPI utilities.
+! The bandpass implementation itself is compiled in full, without extraction.
+module healpix_types
+  implicit none
+  integer, parameter :: dp=kind(1.d0), i4b=kind(1), lgt=kind(.true.)
+  real(dp), parameter :: pi=acos(-1.d0)
+end module
+
+module comm_utils
+  use healpix_types
+  implicit none
+  integer, parameter :: MPI_COMM_WORLD=0, MPI_DOUBLE_PRECISION=1
+  character(len=1), parameter :: base_path=''
+  type planck_rng
+     integer :: state=0
+  end type
+contains
+@TSUM@
+  integer function getlun()
+    logical :: opened
+    getlun=10
+    do
+       inquire(unit=getlun, opened=opened)
+       if (.not. opened) return
+       getlun=getlun+1
+    end do
+  end function
+  subroutine int2string(i, text)
+    integer, intent(in) :: i
+    character(len=*), intent(out) :: text
+    write(text,'(i2.2)') i
+  end subroutine
+  subroutine get_parameter(file,key,par_int,par_dp,par_string,par_lgt,par_present,path)
+    character(len=*), intent(in) :: file,key
+    integer, intent(inout), optional :: par_int
+    real(dp), intent(inout), optional :: par_dp
+    character(len=*), intent(inout), optional :: par_string
+    logical, intent(inout), optional :: par_lgt
+    logical, intent(out), optional :: par_present
+    character(len=*), intent(in), optional :: path
+    character(len=2048) :: line, value
+    integer :: unit, ios, eq
+    logical :: found
+    found=.false.
+    open(newunit=unit,file=file,status='old')
+    do
+       read(unit,'(a)',iostat=ios) line
+       if (ios /= 0) exit
+       eq=index(line,'=')
+       if (eq <= 1) cycle
+       if (trim(adjustl(line(:eq-1))) /= key) cycle
+       value=adjustl(line(eq+1:))
+       if (present(par_int)) read(value,*) par_int
+       if (present(par_dp)) read(value,*) par_dp
+       if (present(par_string)) read(value,*) par_string
+       if (present(par_lgt)) read(value,*) par_lgt
+       found=.true.
+       exit
+    end do
+    close(unit)
+    if (present(par_present)) then
+       par_present=found
+    else if (.not. found) then
+       print *, 'MISSING_PARAMETER: ',key
+       error stop 1
+    end if
+  end subroutine
+  real(dp) function rand_gauss(handle)
+    type(planck_rng), intent(inout) :: handle
+    rand_gauss=0.d0
+  end function
+  subroutine mpi_abort(comm,code,ierr)
+    integer, intent(in) :: comm,code
+    integer, intent(out) :: ierr
+    print *, 'EXPECTED_CBASS_ABORT'
+    error stop 1
+  end subroutine
+  subroutine mpi_comm_rank(comm,rank,ierr)
+    integer, intent(in) :: comm
+    integer, intent(out) :: rank
+    real(dp), intent(out) :: ierr ! Matches this legacy module's initialization declaration.
+    rank=0
+    ierr=0
+  end subroutine
+  subroutine mpi_bcast(values,n,typ,root,comm,ierr)
+    real(dp), intent(inout) :: values(:)
+    integer, intent(in) :: n,typ,root,comm
+    real(dp), intent(out) :: ierr
+    ierr=0
+  end subroutine
+end module
+
+module sort_utils
+  use healpix_types
+  implicit none
+contains
+  subroutine QuickSort(indices,values)
+    integer, intent(inout) :: indices(:)
+    real(dp), intent(inout) :: values(:)
+    if (size(indices) /= 1) error stop 'Fixture expects one band'
+  end subroutine
+end module

@@ -154,3 +154,10 @@ forward-model units/gain, frozen factors and refresh, update cadence, global pix
 Faraday block sampling, and invalid configurations. Cluster-specific I/O,
 smoothing, spline routines and single-rank MPI are substituted in these fixtures;
 a full Commander build and multi-rank cluster validation are still required.
+
+## Full C-BASS Stokes I bandpass alternative
+
+For direct integration of the measured C-BASS intensity bandpass, use the new
+`CBASS` convention described in [cbass-bandpass.md](cbass-bandpass.md). Set
+`USE_COLOR_CORRECTIONxx=F` for that band: enabling its polynomial simultaneously
+is rejected. Other bands can retain their polynomial corrections.

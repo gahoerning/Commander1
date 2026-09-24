@@ -1,0 +1,17 @@
+# Fragment, not a complete run configuration. Replace 01 with the C-BASS band index.
+# Intensity-only run; the C-BASS map must be in Rayleigh-Jeans microkelvin.
+POLARIZATION = F
+BANDPASS_TYPE01 = 'CBASS'
+BANDPASS01 = 'examples/bandpasses/cbass_I_20130625.dat'
+FREQ_UNIT01 = 'uK_ant'
+# Set these to the reference frequency and flux calibration index of YOUR map.
+FREQ_C01 = 4.76
+BANDPASS_CAL_INDEX01 = -0.299
+# CBASS computes its own conversion factors; positive overrides are rejected.
+A2T01 = -1.0
+F2T01 = -1.0
+A2SZ01 = -1.0
+# Used when APPLY_COLOR_CORRECTIONS=T globally. Other bands may still use polynomials.
+USE_COLOR_CORRECTION01 = F
+# Used when APPLY_BP_CORRECTIONS=T globally; start with the measured bandpass fixed.
+BP_RMS01 = 0.0
