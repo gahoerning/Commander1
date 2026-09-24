@@ -55,9 +55,13 @@ module comm_fg_component_mod
      real(dp), allocatable, dimension(:,:)         :: gauss_prior
      real(dp), allocatable, dimension(:,:,:)       :: S_1D
      real(dp), allocatable, dimension(:,:,:,:,:)   :: S_2D
+     real(dp), allocatable, dimension(:,:,:,:,:)   :: S_faraday_A   ! (4,4,numgrid,numgrid,numband) cos term
+     real(dp), allocatable, dimension(:,:,:,:,:)   :: S_faraday_B   ! (4,4,numgrid,numgrid,numband) sin term
+     real(dp), allocatable, dimension(:,:)         :: faraday_par   ! (numgrid,2) = [beta_grid, RM_grid]
      real(dp)                                      :: nu_peak
      real(dp)                                      :: nu_flat, frac_flat
      real(dp)                                      :: dbeta, nu_break
+     real(dp)                                      :: fixed_beta, nu_min_to_fit, nu_max_to_fit
      real(dp), allocatable, dimension(:)           :: us
      real(dp), allocatable, dimension(:,:)         :: S_nu_ref
      real(dp), allocatable, dimension(:,:)         :: S_phys_dust
@@ -403,6 +407,125 @@ contains
           fg_components(i)%priors(1,:)      = log(fg_components(i)%priors(1,:))
           fg_components(i)%gauss_prior(1,:) = log(fg_components(i)%gauss_prior(1,:))
 
+         else if (trim(fg_components(i)%type) == 'lognormal_parabola') then
+
+            paramname = 'APPLY_JEFFREYS_PRIOR' // i_text
+            call get_parameter(paramfile, paramname, par_lgt=fg_components(i)%apply_jeffreys_prior)       
+  
+            num_fg_par                   = num_fg_par + 2
+            fg_components(i)%npar        = 2
+            fg_components(i)%indlabel(1) = 'nup'
+            fg_components(i)%indlabel(2) = 'width'
+            fg_components(i)%ind_unit(1) = 'GHz'
+            fg_components(i)%ind_unit(2) = ''
+            fg_components(i)%ttype(1)    = 'nu peak'
+            fg_components(i)%ttype(2)    = 'Width'
+            allocate(fg_components(i)%priors(fg_components(i)%npar,3))
+            allocate(fg_components(i)%gauss_prior(2,2))
+            allocate(fg_components(i)%par(numgrid,2))
+            allocate(fg_components(i)%S_2D(4,4,numgrid,numgrid,numband))
+  
+            paramname = 'INITIALIZATION_MODE' // i_text
+            call get_parameter(paramfile, paramname, par_string=fg_components(i)%init_mode)
+               
+            paramname = 'DEFAULT_PEAK_FREQUENCY' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(1,3))
+  
+            paramname = 'DEFAULT_WIDTH' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(2,3))
+  
+            paramname = 'FREQUENCY_PRIOR_UNIFORM_LOW'  // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(1,1))
+            paramname = 'FREQUENCY_PRIOR_UNIFORM_HIGH' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(1,2))
+            if (fg_components(i)%priors(1,1) > fg_components(i)%priors(1,2)) then
+               write(*,*) 'Error: Lower prior is larger than upper prior for parameter no. ', i
+               call mpi_finalize(ierr)
+               stop
+            end if
+            paramname = 'FREQUENCY_PRIOR_GAUSSIAN_MEAN'  // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(1,1))
+            paramname = 'FREQUENCY_PRIOR_GAUSSIAN_STDDEV' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(1,2))
+            
+            paramname = 'WIDTH_PRIOR_UNIFORM_LOW'  // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(2,1))
+            paramname = 'WIDTH_PRIOR_UNIFORM_HIGH' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(2,2))
+            if (fg_components(i)%priors(2,1) > fg_components(i)%priors(2,2)) then
+               write(*,*) 'Error: Lower prior is larger than upper prior for parameter no. ', i
+               call mpi_finalize(ierr)
+               stop
+            end if
+            paramname = 'WIDTH_PRIOR_GAUSSIAN_MEAN'  // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(2,1))
+            paramname = 'WIDTH_PRIOR_GAUSSIAN_STDDEV' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(2,2))
+
+         else if (trim(fg_components(i)%type) == 'fixed_index_template') then
+
+            paramname = 'APPLY_JEFFREYS_PRIOR' // i_text
+            call get_parameter(paramfile, paramname, par_lgt=fg_components(i)%apply_jeffreys_prior)       
+  
+            num_fg_par                   = num_fg_par + 2
+            fg_components(i)%npar        = 2
+            fg_components(i)%indlabel(1) = 'ratio'
+            fg_components(i)%indlabel(2) = 'template'
+            fg_components(i)%ind_unit(1) = 'uK_RJ/template unit'
+            fg_components(i)%ind_unit(2) = 'template unit'
+            fg_components(i)%ttype(1)    = 'ratio'
+            fg_components(i)%ttype(2)    = 'template'
+            allocate(fg_components(i)%priors(fg_components(i)%npar,3))
+            allocate(fg_components(i)%gauss_prior(2,2))
+            allocate(fg_components(i)%par(numgrid,2))
+            allocate(fg_components(i)%S_2D(4,4,numgrid,numgrid,numband))
+  
+            paramname = 'INITIALIZATION_MODE' // i_text
+            call get_parameter(paramfile, paramname, par_string=fg_components(i)%init_mode)
+
+            paramname = 'SPECTRAL_INDEX' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%fixed_beta) 
+
+            paramname = 'FREQ_MIN' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%nu_min_to_fit)
+            
+            paramname = 'FREQ_MAX' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%nu_max_to_fit)
+               
+            paramname = 'DEFAULT_RATIO' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(1,3))
+  
+            paramname = 'DEFAULT_HALPHA' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(2,3))
+  
+            paramname = 'RATIO_PRIOR_UNIFORM_LOW'  // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(1,1))
+            paramname = 'RATIO_PRIOR_UNIFORM_HIGH' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(1,2))
+            if (fg_components(i)%priors(1,1) > fg_components(i)%priors(1,2)) then
+               write(*,*) 'Error: Lower prior is larger than upper prior for parameter no. ', i
+               call mpi_finalize(ierr)
+               stop
+            end if
+            paramname = 'RATIO_PRIOR_GAUSSIAN_MEAN'  // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(1,1))
+            paramname = 'RATIO_PRIOR_GAUSSIAN_STDDEV' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(1,2))
+            
+            paramname = 'HALPHA_PRIOR_UNIFORM_LOW'  // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(2,1))
+            paramname = 'HALPHA_PRIOR_UNIFORM_HIGH' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(2,2))
+            if (fg_components(i)%priors(2,1) > fg_components(i)%priors(2,2)) then
+               write(*,*) 'Error: Lower prior is larger than upper prior for parameter no. ', i
+               call mpi_finalize(ierr)
+               stop
+            end if
+            paramname = 'HALPHA_PRIOR_GAUSSIAN_MEAN'  // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(2,1))
+            paramname = 'HALPHA_PRIOR_GAUSSIAN_STDDEV' // i_text
+            call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(2,2))
+
        else if (trim(fg_components(i)%type) == 'power_law') then
 
           paramname = 'APPLY_JEFFREYS_PRIOR' // i_text
@@ -516,7 +639,212 @@ contains
           paramname = 'DBETA_PRIOR_GAUSSIAN_STDDEV' // i_text
           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(2,2))
 
-       else if (trim(fg_components(i)%type) == 'freefree') then
+        else if (trim(fg_components(i)%type) == 'power_law_faraday') then
+
+           ! Synchrotron with Faraday rotation: 4 spectral parameters
+           ! p(1) = Q0 (reference Q amplitude, uK_ant)
+           ! p(2) = U0 (reference U amplitude, uK_ant)
+           ! p(3) = beta (spectral index)
+           ! p(4) = RM (rotation measure, rad/m^2)
+           paramname = 'APPLY_JEFFREYS_PRIOR' // i_text
+           call get_parameter(paramfile, paramname, par_lgt=fg_components(i)%apply_jeffreys_prior)
+
+           num_fg_par                   = num_fg_par + 4
+           fg_components(i)%npar        = 4
+           fg_components(i)%indlabel(1) = 'Q0'
+           fg_components(i)%indlabel(2) = 'U0'
+           fg_components(i)%indlabel(3) = 'beta'
+           fg_components(i)%indlabel(4) = 'RM'
+           fg_components(i)%ind_unit(1) = 'uK'
+           fg_components(i)%ind_unit(2) = 'uK'
+           fg_components(i)%ind_unit(3) = ''
+           fg_components(i)%ind_unit(4) = 'rad/m^2'
+           fg_components(i)%ttype(1)    = 'Q0'
+           fg_components(i)%ttype(2)    = 'U0'
+           fg_components(i)%ttype(3)    = 'Beta'
+           fg_components(i)%ttype(4)    = 'RM'
+           allocate(fg_components(i)%priors(fg_components(i)%npar,3))
+           allocate(fg_components(i)%gauss_prior(4,2))
+           allocate(fg_components(i)%par(numgrid,4))
+           allocate(fg_components(i)%S_1D(numgrid,2,numband))
+            allocate(fg_components(i)%S_faraday_A(4,4,numgrid,numgrid,numband))
+            allocate(fg_components(i)%S_faraday_B(4,4,numgrid,numgrid,numband))
+            allocate(fg_components(i)%faraday_par(numgrid,2))
+
+           paramname = 'INITIALIZATION_MODE' // i_text
+           call get_parameter(paramfile, paramname, par_string=fg_components(i)%init_mode)
+
+           ! Q0 priors
+           paramname = 'DEFAULT_Q0' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(1,3))
+           paramname = 'Q0_PRIOR_UNIFORM_LOW'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(1,1))
+           paramname = 'Q0_PRIOR_UNIFORM_HIGH' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(1,2))
+           if (fg_components(i)%priors(1,1) > fg_components(i)%priors(1,2)) then
+              write(*,*) 'Error: Lower prior is larger than upper prior for Q0, component ', i
+              call mpi_finalize(ierr)
+              stop
+           end if
+           paramname = 'Q0_PRIOR_GAUSSIAN_MEAN'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(1,1))
+           paramname = 'Q0_PRIOR_GAUSSIAN_STDDEV' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(1,2))
+
+           ! U0 priors
+           paramname = 'DEFAULT_U0' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(2,3))
+           paramname = 'U0_PRIOR_UNIFORM_LOW'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(2,1))
+           paramname = 'U0_PRIOR_UNIFORM_HIGH' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(2,2))
+           if (fg_components(i)%priors(2,1) > fg_components(i)%priors(2,2)) then
+              write(*,*) 'Error: Lower prior is larger than upper prior for U0, component ', i
+              call mpi_finalize(ierr)
+              stop
+           end if
+           paramname = 'U0_PRIOR_GAUSSIAN_MEAN'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(2,1))
+           paramname = 'U0_PRIOR_GAUSSIAN_STDDEV' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(2,2))
+
+           ! beta priors
+           paramname = 'DEFAULT_BETA_FARADAY' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(3,3))
+           paramname = 'BETA_FARADAY_PRIOR_UNIFORM_LOW'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(3,1))
+           paramname = 'BETA_FARADAY_PRIOR_UNIFORM_HIGH' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(3,2))
+           if (fg_components(i)%priors(3,1) > fg_components(i)%priors(3,2)) then
+              write(*,*) 'Error: Lower prior is larger than upper prior for beta, component ', i
+              call mpi_finalize(ierr)
+              stop
+           end if
+           paramname = 'BETA_FARADAY_PRIOR_GAUSSIAN_MEAN'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(3,1))
+           paramname = 'BETA_FARADAY_PRIOR_GAUSSIAN_STDDEV' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(3,2))
+
+           ! RM priors
+           paramname = 'DEFAULT_RM' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(4,3))
+           paramname = 'RM_PRIOR_UNIFORM_LOW'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(4,1))
+           paramname = 'RM_PRIOR_UNIFORM_HIGH' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(4,2))
+           if (fg_components(i)%priors(4,1) > fg_components(i)%priors(4,2)) then
+              write(*,*) 'Error: Lower prior is larger than upper prior for RM, component ', i
+              call mpi_finalize(ierr)
+              stop
+           end if
+           paramname = 'RM_PRIOR_GAUSSIAN_MEAN'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(4,1))
+           paramname = 'RM_PRIOR_GAUSSIAN_STDDEV' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(4,2))
+
+        else if (trim(fg_components(i)%type) == 'power_law_faraday_BS') then
+
+           ! Synchrotron with Faraday rotation + block sampling of Q0, U0
+           ! Same 4 spectral parameters as power_law_faraday:
+           ! p(1) = Q0, p(2) = U0, p(3) = beta, p(4) = RM
+           ! Difference: Q0 and U0 are sampled analytically as a 2D block
+           paramname = 'APPLY_JEFFREYS_PRIOR' // i_text
+           call get_parameter(paramfile, paramname, par_lgt=fg_components(i)%apply_jeffreys_prior)
+
+           num_fg_par                   = num_fg_par + 4
+           fg_components(i)%npar        = 4
+           fg_components(i)%indlabel(1) = 'Q0'
+           fg_components(i)%indlabel(2) = 'U0'
+           fg_components(i)%indlabel(3) = 'beta'
+           fg_components(i)%indlabel(4) = 'RM'
+           fg_components(i)%ind_unit(1) = 'uK'
+           fg_components(i)%ind_unit(2) = 'uK'
+           fg_components(i)%ind_unit(3) = ''
+           fg_components(i)%ind_unit(4) = 'rad/m^2'
+           fg_components(i)%ttype(1)    = 'Q0'
+           fg_components(i)%ttype(2)    = 'U0'
+           fg_components(i)%ttype(3)    = 'Beta'
+           fg_components(i)%ttype(4)    = 'RM'
+           allocate(fg_components(i)%priors(fg_components(i)%npar,3))
+           allocate(fg_components(i)%gauss_prior(4,2))
+           allocate(fg_components(i)%par(numgrid,4))
+           allocate(fg_components(i)%S_1D(numgrid,2,numband))
+            allocate(fg_components(i)%S_faraday_A(4,4,numgrid,numgrid,numband))
+            allocate(fg_components(i)%S_faraday_B(4,4,numgrid,numgrid,numband))
+            allocate(fg_components(i)%faraday_par(numgrid,2))
+
+           paramname = 'INITIALIZATION_MODE' // i_text
+           call get_parameter(paramfile, paramname, par_string=fg_components(i)%init_mode)
+
+           ! Q0 priors
+           paramname = 'DEFAULT_Q0' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(1,3))
+           paramname = 'Q0_PRIOR_UNIFORM_LOW'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(1,1))
+           paramname = 'Q0_PRIOR_UNIFORM_HIGH' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(1,2))
+           if (fg_components(i)%priors(1,1) > fg_components(i)%priors(1,2)) then
+              write(*,*) 'Error: Lower prior > upper prior for Q0, component ', i
+              call mpi_finalize(ierr)
+              stop
+           end if
+           paramname = 'Q0_PRIOR_GAUSSIAN_MEAN'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(1,1))
+           paramname = 'Q0_PRIOR_GAUSSIAN_STDDEV' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(1,2))
+
+           ! U0 priors
+           paramname = 'DEFAULT_U0' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(2,3))
+           paramname = 'U0_PRIOR_UNIFORM_LOW'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(2,1))
+           paramname = 'U0_PRIOR_UNIFORM_HIGH' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(2,2))
+           if (fg_components(i)%priors(2,1) > fg_components(i)%priors(2,2)) then
+              write(*,*) 'Error: Lower prior > upper prior for U0, component ', i
+              call mpi_finalize(ierr)
+              stop
+           end if
+           paramname = 'U0_PRIOR_GAUSSIAN_MEAN'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(2,1))
+           paramname = 'U0_PRIOR_GAUSSIAN_STDDEV' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(2,2))
+
+           ! beta priors
+           paramname = 'DEFAULT_BETA_FARADAY' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(3,3))
+           paramname = 'BETA_FARADAY_PRIOR_UNIFORM_LOW'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(3,1))
+           paramname = 'BETA_FARADAY_PRIOR_UNIFORM_HIGH' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(3,2))
+           if (fg_components(i)%priors(3,1) > fg_components(i)%priors(3,2)) then
+              write(*,*) 'Error: Lower prior > upper prior for beta, component ', i
+              call mpi_finalize(ierr)
+              stop
+           end if
+           paramname = 'BETA_FARADAY_PRIOR_GAUSSIAN_MEAN'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(3,1))
+           paramname = 'BETA_FARADAY_PRIOR_GAUSSIAN_STDDEV' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(3,2))
+
+           ! RM priors
+           paramname = 'DEFAULT_RM' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(4,3))
+           paramname = 'RM_PRIOR_UNIFORM_LOW'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(4,1))
+           paramname = 'RM_PRIOR_UNIFORM_HIGH' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%priors(4,2))
+           if (fg_components(i)%priors(4,1) > fg_components(i)%priors(4,2)) then
+              write(*,*) 'Error: Lower prior > upper prior for RM, component ', i
+              call mpi_finalize(ierr)
+              stop
+           end if
+           paramname = 'RM_PRIOR_GAUSSIAN_MEAN'  // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(4,1))
+           paramname = 'RM_PRIOR_GAUSSIAN_STDDEV' // i_text
+           call get_parameter(paramfile, paramname, par_dp=fg_components(i)%gauss_prior(4,2))
+
+        else if (trim(fg_components(i)%type) == 'freefree') then
 
           paramname = 'APPLY_JEFFREYS_PRIOR' // i_text
           call get_parameter(paramfile, paramname, par_lgt=fg_components(i)%apply_jeffreys_prior)       
@@ -994,6 +1322,35 @@ contains
        get_effective_fg_spectrum = compute_CO_multiline_spectrum(band, &
             & fg_comp%co_band(1:fg_comp%npar+1), fg_comp%nu_ref, fg_params) * ant2data(band)
 
+     else if (trim(fg_comp%type) == 'power_law_faraday' .or. &
+          & trim(fg_comp%type) == 'power_law_faraday_BS') then
+
+        ! Precomputed 2D spline lookup for Faraday rotation.
+        ! fg_params = [Q0, U0, beta, RM]
+        ! Q_bp = Q0 * A(beta,RM) - U0 * B(beta,RM)
+        ! U_bp = Q0 * B(beta,RM) + U0 * A(beta,RM)
+        if (.not. present(pol) .or. pol == 1) then
+           get_effective_fg_spectrum = 0.d0
+           return
+        else
+           block
+              real(dp) :: Q0_val, U0_val, beta_val, RM_val, A_val, B_val
+              Q0_val   = fg_params(1)
+              U0_val   = fg_params(2)
+              beta_val = max(min(fg_params(3), fg_comp%priors(3,2)), fg_comp%priors(3,1))
+              RM_val   = max(min(fg_params(4), fg_comp%priors(4,2)), fg_comp%priors(4,1))
+              A_val = splin2_full_precomp(fg_comp%faraday_par(:,1), fg_comp%faraday_par(:,2), &
+                   & fg_comp%S_faraday_A(:,:,:,:,band), beta_val, RM_val)
+              B_val = splin2_full_precomp(fg_comp%faraday_par(:,1), fg_comp%faraday_par(:,2), &
+                   & fg_comp%S_faraday_B(:,:,:,:,band), beta_val, RM_val)
+              if (pol == 2) then
+                 get_effective_fg_spectrum = Q0_val * A_val - U0_val * B_val
+              else
+                 get_effective_fg_spectrum = Q0_val * B_val + U0_val * A_val
+              end if
+           end block
+        end if
+
     else if (fg_comp%npar == 0) then
           
        get_effective_fg_spectrum = fg_comp%S_tabulated(band) 
@@ -1068,6 +1425,19 @@ contains
        S_eff_1 = get_effective_fg_spectrum(fg_comp, band, fg_params)
        S_eff_2 = get_effective_fg_spectrum(fg_comp, band, p)
        get_effective_deriv_fg_spectrum = (S_eff_2-S_eff_1) / delta * fg_comp%S_tabulated(band) 
+
+     else if (trim(fg_comp%type) == 'power_law_faraday' .or. &
+          & trim(fg_comp%type) == 'power_law_faraday_BS') then
+
+        ! Numerical derivative via finite difference for Faraday rotation (npar=4)
+        block
+           real(dp) :: p_fr(4)
+           p_fr = fg_params(1:4)
+           p_fr(par_id) = p_fr(par_id) + delta
+           S_eff_1 = get_effective_fg_spectrum(fg_comp, band, fg_params, pixel=pixel, pol=pol)
+           S_eff_2 = get_effective_fg_spectrum(fg_comp, band, p_fr, pixel=pixel, pol=pol)
+           get_effective_deriv_fg_spectrum = (S_eff_2 - S_eff_1) / delta
+        end block
 
     else
 
@@ -1344,17 +1714,52 @@ contains
     else if (trim(fg_comp%type) == 'physical_dust') then                         
        get_ideal_fg_spectrum = compute_physical_dust_spectrum(nu, p(1), fg_comp%us, & 
             fg_comp%nu_ref, fg_comp%S_phys_dust, fg_comp%S_dust_coeff, fg_comp%p_rms)
+    else if (trim(fg_comp%type) == 'lognormal_parabola') then
+       get_ideal_fg_spectrum = compute_lognormal_parabola_spectrum(nu, fg_comp%nu_ref, &
+            & p(1), p(2), fg_comp%p_rms)
+    else if (trim(fg_comp%type) == 'fixed_index_template') then
+       get_ideal_fg_spectrum = compute_fixed_index_template_spectrum(nu, fg_comp%nu_ref, &
+            & p(1), p(2), fg_comp%fixed_beta, fg_comp%nu_min_to_fit, fg_comp%nu_max_to_fit, fg_comp%p_rms)
     else if (trim(fg_comp%type) == 'power_law') then
        get_ideal_fg_spectrum = compute_power_law_spectrum(nu, fg_comp%nu_ref, &
             & p(1), p(2), fg_comp%p_rms)
     else if (trim(fg_comp%type) == 'power_law_break') then
        get_ideal_fg_spectrum = compute_power_law_break_spectrum(nu, fg_comp%nu_ref, &
             & p(2), p(1), fg_comp%nu_break, fg_comp%p_rms) 
-    else if (trim(fg_comp%type) == 'freefree_EM') then
-       get_ideal_fg_spectrum = compute_freefree_EM_spectrum(nu, p(1), p(2)) 
-    end if
+     else if (trim(fg_comp%type) == 'freefree_EM') then
+        get_ideal_fg_spectrum = compute_freefree_EM_spectrum(nu, p(1), p(2)) 
+     else if (trim(fg_comp%type) == 'power_law_faraday' .or. &
+          & trim(fg_comp%type) == 'power_law_faraday_BS') then
+        ! Return the scalar power-law SED (no Faraday rotation applied here)
+        ! p(3) = beta; no curvature for this component
+        get_ideal_fg_spectrum = (nu/fg_comp%nu_ref)**p(3)
+     end if
 
   end function get_ideal_fg_spectrum
+
+  function compute_lognormal_parabola_spectrum(nu, nu_ref, nu_peak, width, rms)
+   implicit none
+
+   real(dp),               intent(in) :: nu, nu_ref, nu_peak, width
+   real(dp), dimension(:), intent(in) :: rms
+   real(dp)                           :: compute_lognormal_parabola_spectrum
+   real(dp) :: nup_1d9
+
+   nup_1d9 = nu_peak * 1.d9
+   compute_lognormal_parabola_spectrum = exp(-0.5 * (log(nu/nup_1d9)/width)**2)*(nu_ref/nu)**2
+
+ end function compute_lognormal_parabola_spectrum
+
+ function compute_fixed_index_template_spectrum(nu, nu_ref, ratio, halpha, fixed_beta, nu_min_to_fit, nu_max_to_fit, rms)
+   implicit none
+
+   real(dp),               intent(in) :: nu, nu_ref, ratio, halpha, fixed_beta, nu_min_to_fit, nu_max_to_fit
+   real(dp), dimension(:), intent(in) :: rms
+   real(dp)                           :: compute_fixed_index_template_spectrum
+
+   compute_fixed_index_template_spectrum = ratio * halpha * (nu/nu_ref)**(fixed_beta)
+
+ end function compute_fixed_index_template_spectrum
 
   function compute_power_law_spectrum(nu, nu_ref, beta, C, rms)
     implicit none
@@ -1428,6 +1833,37 @@ contains
     compute_power_law_break_spectrum = S
 
   end function compute_power_law_break_spectrum
+
+   subroutine compute_faraday_rotation(nu, nu_ref, Q0, U0, RM, beta, Q_out, U_out)
+     ! Compute Faraday-rotated Q and U at frequency nu.
+     ! Model: S(nu) = (nu/nu_ref)^beta
+     !        dpsi  = RM * [(c/nu)^2 - (c/nu_ref)^2]   <- differential w.r.t. reference lambda^2
+     !        Q_out = S(nu) * [Q0*cos(2*dpsi) - U0*sin(2*dpsi)]
+     !        U_out = S(nu) * [Q0*sin(2*dpsi) + U0*cos(2*dpsi)]
+     ! At nu = nu_ref: dpsi = 0, so Q_out = Q0 and U_out = U0 (correctly).
+     implicit none
+
+     real(dp), intent(in)  :: nu, nu_ref, Q0, U0, RM, beta
+     real(dp), intent(out) :: Q_out, U_out
+
+     real(dp) :: S_nu, delta_psi, cos2psi, sin2psi
+     real(dp), parameter :: c_light = 2.99792458d8  ! m/s
+
+     ! Power-law SED
+     S_nu = (nu / nu_ref)**beta
+
+     ! Faraday rotation angle: differential w.r.t. reference lambda^2
+     ! so that at nu = nu_ref, delta_psi = 0 and (Q0, U0) are the intrinsic Stokes params
+     delta_psi = RM * ((c_light / nu)**2 - (c_light / nu_ref)**2)
+
+     ! Rotation matrix applied to (Q0, U0)
+     cos2psi = cos(2.d0 * delta_psi)
+     sin2psi = sin(2.d0 * delta_psi)
+
+     Q_out = S_nu * (Q0 * cos2psi - U0 * sin2psi)
+     U_out = S_nu * (Q0 * sin2psi + U0 * cos2psi)
+
+   end subroutine compute_faraday_rotation
 
   function compute_freefree_spectrum(nu, nu_ref, T_e)
     implicit none
@@ -1885,9 +2321,69 @@ contains
 
        if (c > 0 .and. c /= i) cycle
 
-       if (trim(fg_components(i)%type) == 'CO_multiline') then
+        if (trim(fg_components(i)%type) == 'CO_multiline') then
 
-          ! Do nothing
+           ! Do nothing
+
+        else if (trim(fg_components(i)%type) == 'power_law_faraday' .or. &
+             & trim(fg_components(i)%type) == 'power_law_faraday_BS') then
+
+           ! Precompute Faraday A(beta,RM) and B(beta,RM) lookup tables
+           ! A = bp_avg[ (nu/nu_ref)^beta * cos(2*RM*lambda2) ]
+           ! B = bp_avg[ (nu/nu_ref)^beta * sin(2*RM*lambda2) ]
+           block
+              real(dp), allocatable :: grid_A(:,:,:), grid_B(:,:,:)
+              real(dp), allocatable :: s_cos(:), s_sin(:)
+              real(dp) :: nu_j, beta_k, RM_l, lambda2, S_pow
+              real(dp), parameter :: c_light = 2.99792458d8  ! m/s
+              integer(i4b) :: kk, ll, jj, mm, nn
+
+              ! Copy the beta x RM grid axes
+              fg_components(i)%faraday_par(:,1) = fg_components(i)%par(:,3)  ! beta grid
+              fg_components(i)%faraday_par(:,2) = fg_components(i)%par(:,4)  ! RM grid
+
+              allocate(grid_A(numgrid,numgrid,numband))
+              allocate(grid_B(numgrid,numgrid,numband))
+              grid_A = 0.d0
+              grid_B = 0.d0
+
+              do mm = 1, numband
+                 nn = bp(mm)%n
+                 allocate(s_cos(nn), s_sin(nn))
+                 do kk = 1+myid_chain, numgrid, numprocs_chain
+                    beta_k = fg_components(i)%faraday_par(kk,1)
+                    do ll = 1, numgrid
+                       RM_l = fg_components(i)%faraday_par(ll,2)
+                       do jj = 1, nn
+                          nu_j = bp(mm)%nu(jj)
+                          S_pow = (nu_j / fg_components(i)%nu_ref)**beta_k
+                          lambda2 = (c_light/nu_j)**2 - (c_light/fg_components(i)%nu_ref)**2
+                          s_cos(jj) = S_pow * cos(2.d0 * RM_l * lambda2)
+                          s_sin(jj) = S_pow * sin(2.d0 * RM_l * lambda2)
+                       end do
+                       grid_A(kk,ll,mm) = get_bp_avg_spectrum(mm, s_cos)
+                       grid_B(kk,ll,mm) = get_bp_avg_spectrum(mm, s_sin)
+                    end do
+                 end do
+                 deallocate(s_cos, s_sin)
+              end do
+
+              call mpi_allreduce(MPI_IN_PLACE, grid_A, size(grid_A), MPI_DOUBLE_PRECISION, MPI_SUM, &
+                   & comm_chain, ierr)
+              call mpi_allreduce(MPI_IN_PLACE, grid_B, size(grid_B), MPI_DOUBLE_PRECISION, MPI_SUM, &
+                   & comm_chain, ierr)
+
+              do mm = 1, numband
+                 call splie2_full_precomp(fg_components(i)%faraday_par(:,1), &
+                      & fg_components(i)%faraday_par(:,2), grid_A(:,:,mm), &
+                      & fg_components(i)%S_faraday_A(:,:,:,:,mm))
+                 call splie2_full_precomp(fg_components(i)%faraday_par(:,1), &
+                      & fg_components(i)%faraday_par(:,2), grid_B(:,:,mm), &
+                      & fg_components(i)%S_faraday_B(:,:,:,:,mm))
+              end do
+
+              deallocate(grid_A, grid_B)
+           end block
 
        else if (fg_components(i)%npar == 1) then
 
@@ -1950,6 +2446,14 @@ contains
                          s(j) = compute_power_law_spectrum(nu, fg_components(i)%nu_ref, &
                               & fg_components(i)%par(k,1), fg_components(i)%par(l,2), &
                               & fg_components(i)%p_rms)
+                      else if (trim(fg_components(i)%type) == 'lognormal_parabola') then
+                         s(j) = compute_lognormal_parabola_spectrum(nu, fg_components(i)%nu_ref, &
+                              & fg_components(i)%par(k,1), fg_components(i)%par(l,2), &
+                              & fg_components(i)%p_rms)
+                     else if (trim(fg_components(i)%type) == 'fixed_index_template') then
+                         s(j) = compute_fixed_index_template_spectrum(nu, fg_components(i)%nu_ref, &
+                              & fg_components(i)%par(k,1), fg_components(i)%par(l,2), &
+                              & fg_components(i)%fixed_beta, fg_components(i)%nu_min_to_fit, fg_components(i)%nu_max_to_fit, fg_components(i)%p_rms)
                       else if (trim(fg_components(i)%type) == 'AME_freq_shift_2par') then                         
                          s(j) = compute_AME_freq_shift_2par_spectrum(nu, fg_components(i)%nu_ref, &
                               & fg_components(i)%par(k,1), fg_components(i)%par(l,2), &
@@ -1964,7 +2468,17 @@ contains
                               & fg_components(i)%par(k,1), fg_components(i)%par(l,2)) 
                       end if
                    end do
-                   my_grid(k,l,m) = get_bp_avg_spectrum(m, s)
+                   ! Color correction: if enabled for this band and component is
+                   ! the CC reference, use cc(beta)*S(nu_c) instead of bandpass avg
+                   if (bp(m)%use_color_corr .and. bp(m)%cc_comp == i &
+                        & .and. trim(fg_components(i)%type) == 'power_law') then
+                      my_grid(k,l,m) = (bp(m)%cc_coeffs(1) + bp(m)%cc_coeffs(2) * fg_components(i)%par(k,1) &
+                           & + bp(m)%cc_coeffs(3) * fg_components(i)%par(k,1)**2) &
+                           & * compute_power_law_spectrum(bp(m)%nu_c, fg_components(i)%nu_ref, &
+                           & fg_components(i)%par(k,1), fg_components(i)%par(l,2), fg_components(i)%p_rms)
+                   else
+                      my_grid(k,l,m) = get_bp_avg_spectrum(m, s)
+                   end if
                 end do
              end do
              deallocate(s)

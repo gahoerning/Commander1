@@ -21,6 +21,10 @@ module comm_bp_mod
      real(dp)          :: nu_c, gain, gain_rms, delta, delta_rms
      real(dp)          :: a2t, f2t, co2t, a2sz
      real(dp), allocatable, dimension(:) :: nu0, nu, tau0, tau
+     ! Color correction fields
+     logical(lgt)      :: use_color_corr
+     integer(i4b)      :: cc_comp         ! Reference component index
+     real(dp)          :: cc_coeffs(3)    ! Polynomial [c0, c1, c2]
   end type bandinfo
 
   real(dp)                                      :: ind_iras                                     
@@ -41,7 +45,7 @@ contains
     type(planck_rng), intent(inout) :: handle
 
     integer(i4b)        :: i, j, q, unit, myid_chain
-    logical(lgt)        :: exist, apply_bp_corr, apply_gain_corr
+    logical(lgt)        :: exist, apply_bp_corr, apply_gain_corr, apply_color_corr
     real(dp)            :: threshold, gain_init_rms, bp_init_rms, ierr
     character(len=2)    :: i_text
     character(len=256)  :: filename, chaindir, gain_init_file, bp_init_file, MJySr_convention
@@ -61,6 +65,7 @@ contains
     call get_parameter(paramfile, 'MJYSR_CONVENTION',       par_string=MJysr_convention)
     call get_parameter(paramfile, 'APPLY_BP_CORRECTIONS',   par_lgt=apply_bp_corr)
     call get_parameter(paramfile, 'APPLY_GAIN_CORRECTIONS', par_lgt=apply_gain_corr)
+    call get_parameter(paramfile, 'APPLY_COLOR_CORRECTIONS', par_lgt=apply_color_corr)
     call get_parameter(paramfile, 'GAIN_INIT_RMS',          par_dp=gain_init_rms)
     call get_parameter(paramfile, 'BP_INIT_RMS',            par_dp=bp_init_rms)
     if (trim(MJysr_convention) == 'PSM') then
@@ -91,6 +96,21 @@ contains
           call get_parameter(paramfile, 'BP_RMS'         // i_text, par_dp=bp(i)%delta_rms)
        else
           bp(i)%delta_rms = 0.d0
+       end if
+
+       ! Color correction: optional, default off
+       bp(i)%use_color_corr = .false.
+       bp(i)%cc_comp        = 0
+       bp(i)%cc_coeffs      = 0.d0
+       if (apply_color_corr) then
+          call get_parameter(paramfile, 'USE_COLOR_CORRECTION' // i_text, &
+               & par_lgt=bp(i)%use_color_corr)
+          if (bp(i)%use_color_corr) then
+             call get_parameter(paramfile, 'COLOR_CORR_COMPONENT' // i_text, par_int=bp(i)%cc_comp)
+             call get_parameter(paramfile, 'COLOR_CORR_C0' // i_text, par_dp=bp(i)%cc_coeffs(1))
+             call get_parameter(paramfile, 'COLOR_CORR_C1' // i_text, par_dp=bp(i)%cc_coeffs(2))
+             call get_parameter(paramfile, 'COLOR_CORR_C2' // i_text, par_dp=bp(i)%cc_coeffs(3))
+          end if
        end if
        if (trim(bp(i)%id) == 'delta') then
           filename = ''

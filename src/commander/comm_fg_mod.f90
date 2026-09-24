@@ -150,6 +150,38 @@ contains
              p = p+1
              cycle
           end if
+          ! Block sampling hook: for power_law_faraday_BS,
+          ! sample Q0 and U0 together when j==1, skip j==2
+          if (trim(fg_components(i)%type) == 'power_law_faraday_BS') then
+             if (j == 2) then
+                ! U0 already sampled in the Q0 block step
+                p = p+1
+                cycle
+             else if (j == 1) then
+                ! Block-sample Q0 and U0 analytically
+                if (myid_chain == root .and. verbosity >= 3) &
+                     & write(*,fmt='(a,a,a)') 'Block-sampling Q0,U0 -- ', &
+                     & trim(fg_components(i)%label), ' (analytical)'
+                do r = 1, fg_components(i)%indregs(j)%nregset
+                   do b = 1, fg_components(i)%indregs(j)%regset(r)%n
+                      q = fg_components(i)%indregs(j)%regset(r)%r(b)
+                      if (myid_chain == root) then
+                         call sample_QU_block_region(residuals, inv_N, fg_amp, &
+                              & fg_components(i)%indregs(j)%regions(q), p, i, par_prop, par_smooth)
+                      end if
+                   end do
+                end do
+                if (myid_chain == root) then
+                   par0(:,:,p)   = par_prop(:,:,p)
+                   par0(:,:,p+1) = par_prop(:,:,p+1)
+                end if
+                call mpi_bcast(par0(:,:,p),   size(par0(:,:,p)),   MPI_DOUBLE_PRECISION, root, comm_chain, ierr)
+                call mpi_bcast(par0(:,:,p+1), size(par0(:,:,p+1)), MPI_DOUBLE_PRECISION, root, comm_chain, ierr)
+                call get_smooth_par_map(par0, par_smooth)
+                p = p+1
+                cycle
+             end if
+          end if
           do r = 1, fg_components(i)%indregs(j)%nregset
              if (myid_chain == root .and. verbosity >= 3) write(*,fmt='(a,a,a,a,a,i4)') 'Sampling fg_par -- ', &
                   & trim(fg_components(i)%label), ' ', trim(fg_components(i)%indlabel(j)), ', regset = ', r
@@ -855,8 +887,12 @@ contains
     namp = 0
     ! NEW
     do i = 1, num_fg_comp
-       if (trim(fg_components(i)%type) /= 'freefree_EM' .and. & 
-            & fg_components(i)%sample_amplitudes) namp = namp+1
+      if (.not. (trim(fg_components(i)%type) == 'freefree_EM' .or. &
+               trim(fg_components(i)%type) == 'fixed_index_template') .and. &
+         fg_components(i)%sample_amplitudes) then
+         namp = namp + 1
+      end if
+
     end do
 
     npar = namp
@@ -1141,7 +1177,7 @@ contains
     k = 1
     ! Putting amplitude into sampling array. Do not put amplitudes that are not supposed to be sampled in.
     do i = 1, num_fg_comp
-       if (trim(fg_components(i)%type) /= 'freefree_EM' .and. fg_components(i)%sample_amplitudes) then
+       if ((trim(fg_components(i)%type) /= 'freefree_EM' .or. trim(fg_components(i)%type) /= 'fixed_index_template') .and. fg_components(i)%sample_amplitudes) then
           res(k) = p(i)
           k      = k+1
        end if
@@ -1200,7 +1236,7 @@ contains
           ! x_def has all initial amplitude values stored
           ! Does it contain the right stuff though?
           cycle
-       else if (trim(fg_components(i)%type) /= 'freefree_EM') then
+       else if (trim(fg_components(i)%type) /= 'freefree_EM' .or. trim(fg_components(i)%type) /= 'fixed_index_template') then
           res(i) = x(k)
           k      = k+1
        else
@@ -1429,6 +1465,7 @@ contains
                 corrlen(i,:) = 1
                 do f = 1, num_fg_comp
                    if (trim(fg_components(f)%type) == 'freefree_EM') corrlen(i,f) = -1
+                   if (trim(fg_components(f)%type) == 'fixed_index_template') corrlen(i,f) = -1
                    if (.not. enforce_zero_cl .and. trim(fg_components(f)%type) == 'cmb' &
                         & .and. mask_lowres(i,1) > 0.5d0) corrlen(i,f) = -1
                    if (all(M(:,f) == 0.d0)) corrlen(i,f) = -1
@@ -1446,6 +1483,7 @@ contains
                       do f = 1, num_fg_comp
                          !if (.not. fg_components(f)%enforce_positive_amplitude) cycle
                          if (trim(fg_components(f)%type) == 'freefree_EM') cycle
+                         if (trim(fg_components(f)%type) == 'fixed_index_template') cycle
                          if (.not. enforce_zero_cl .and. trim(fg_components(f)%type) == 'cmb' &
                               & .and. mask_lowres(i,1) > 0.5d0) cycle
                          if (all(M(:,f) == 0.d0)) then
@@ -1491,7 +1529,8 @@ contains
                    do f = 1, num_fg_comp
                       if ((.not. enforce_zero_cl .and. trim(fg_components(f)%type) == 'cmb' .and. &
                            & mask_lowres(i,1) > 0.5d0) .or. all(M(:,f) == 0.d0) .or. &
-                           & trim(fg_components(f)%type) == 'freefree_EM') then
+                           & trim(fg_components(f)%type) == 'freefree_EM' .or. &
+                           & trim(fg_components(f)%type) == 'fixed_index_template') then
                          !if (.not. fg_components(f)%enforce_positive_amplitude .or. all(M(:,f) == 0.d0)) then
                          !if (all(M(:,f) == 0.d0)) then
                          corrlen(i,f) = -1
@@ -1707,5 +1746,159 @@ contains
     end do
 
   end function rand_trunc_gauss
+
+
+  subroutine sample_QU_block_region(data, inv_N_rms, amp, region, p_Q0, comp, par_map, par_smooth)
+    ! Block-sample Q0 and U0 analytically for power_law_faraday_BS.
+    ! Given fixed beta and RM, the signal is linear in (Q0, U0):
+    !   signal_Q(b) = Q0 * R_QQ(b) + U0 * R_QU(b)
+    !   signal_U(b) = Q0 * R_UQ(b) + U0 * R_UU(b)
+    ! where R_QQ = R_UU = bp_avg[S*cos(2dpsi)]*gain
+    !       R_QU = -R_UQ = -bp_avg[S*sin(2dpsi)]*gain
+    ! The posterior is a 2D Gaussian; we solve and draw from it.
+    implicit none
+
+    real(dp), dimension(0:,1:,1:),    intent(in)     :: data, amp
+    real(dp), dimension(0:,1:,1:),    intent(in)     :: inv_N_rms
+    type(fg_region),                  intent(in)     :: region
+    integer(i4b),                     intent(in)     :: p_Q0, comp
+    real(dp), dimension(0:,1:,1:),    intent(inout)  :: par_map, par_smooth
+
+    integer(i4b) :: ii, jj, kk, pix, pol, nn
+    real(dp)     :: beta_val, RM_val, Q0_new, U0_new
+    real(dp)     :: R_QQ, R_QU, d_Q, d_U, w_Q, w_U
+    real(dp)     :: AtNiA(2,2), AtNid(2), cov(2,2), mu(2), det_val
+    real(dp)     :: Q_rot, U_rot
+    real(dp), allocatable :: s_cos(:), s_sin(:)
+    real(dp)     :: sig_Q0, sig_U0, mean_Q0, mean_U0
+    real(dp)     :: z1, z2
+    real(dp)     :: L11, L21, L22
+    type(fg_params) :: fg_par
+
+    ! Build the 2x2 normal equations: AtNiA * [Q0, U0]^T = AtNid
+    AtNiA = 0.d0
+    AtNid = 0.d0
+
+    ! Process each pixel in the region
+    do ii = 1, region%n
+       pix = region%pix(ii,1)
+       pol = region%pix(ii,2)
+
+       ! Get current spectral parameters
+       call reorder_fg_params(par_smooth(pix,:,:), fg_par)
+       beta_val = fg_par%comp(comp)%p(pol,3)
+       RM_val   = fg_par%comp(comp)%p(pol,4)
+
+       do kk = 1, numband
+          ! Compute residual: data minus all OTHER components
+          d_Q = data(pix,2,kk)
+          d_U = data(pix,3,kk)
+          do jj = 1, num_fg_comp
+             if (jj == comp) cycle
+             d_Q = d_Q - get_effective_fg_spectrum(fg_components(jj), kk, &
+                  & fg_par%comp(jj)%p(2,:), pixel=pix, pol=2) * amp(pix,2,jj)
+             d_U = d_U - get_effective_fg_spectrum(fg_components(jj), kk, &
+                  & fg_par%comp(jj)%p(3,:), pixel=pix, pol=3) * amp(pix,3,jj)
+          end do
+
+          ! Compute response coefficients for this band:
+          ! Use compute_faraday_rotation with (Q0=1,U0=0) to get
+          !   Q_out = S*cos(2dpsi), U_out = S*sin(2dpsi) at each bandpass point
+          nn = bp(kk)%n
+          allocate(s_cos(nn), s_sin(nn))
+          do jj = 1, nn
+             call compute_faraday_rotation(bp(kk)%nu(jj), fg_components(comp)%nu_ref, &
+                  & 1.d0, 0.d0, RM_val, beta_val, Q_rot, U_rot)
+             s_cos(jj) = Q_rot   ! S(nu)*cos(2*dpsi)
+             s_sin(jj) = U_rot   ! S(nu)*sin(2*dpsi)
+          end do
+          ! R_QQ = bp_avg[S*cos(2dpsi)] * gain  (also equals R_UU)
+          ! R_QU = -bp_avg[S*sin(2dpsi)] * gain (and R_UQ = +bp_avg[S*sin] * gain = -R_QU)
+          R_QQ = get_bp_avg_spectrum(kk, s_cos) * bp(kk)%gain
+          R_QU = -get_bp_avg_spectrum(kk, s_sin) * bp(kk)%gain
+          deallocate(s_cos, s_sin)
+
+          ! Inverse noise weights
+          ! inv_N_rms is already N^{-1} = 1/sigma^2 (see comm_data_mod.f90 line 321);
+          ! do NOT square it again.
+          w_Q = inv_N_rms(pix,2,kk)
+          w_U = inv_N_rms(pix,3,kk)
+          if (fg_components(comp)%indmask(pix,2) < 0.5d0) w_Q = 0.d0
+          if (fg_components(comp)%indmask(pix,3) < 0.5d0) w_U = 0.d0
+
+          ! Accumulate normal equations: A^T N^{-1} A and A^T N^{-1} d
+          ! Response matrix R = [[R_QQ, R_QU], [-R_QU, R_QQ]]
+          ! Column for Q0: [R_QQ, -R_QU]^T;  Column for U0: [R_QU, R_QQ]^T
+          AtNiA(1,1) = AtNiA(1,1) + w_Q * R_QQ**2  + w_U * R_QU**2
+          AtNiA(1,2) = AtNiA(1,2) + w_Q * R_QQ*R_QU - w_U * R_QU*R_QQ
+          AtNiA(2,2) = AtNiA(2,2) + w_Q * R_QU**2  + w_U * R_QQ**2
+
+          AtNid(1)   = AtNid(1) + w_Q * R_QQ * d_Q  - w_U * R_QU * d_U
+          AtNid(2)   = AtNid(2) + w_Q * R_QU * d_Q   + w_U * R_QQ * d_U
+       end do  ! bands
+
+       if (allocated(fg_par%comp)) call deallocate_fg_params(fg_par)
+    end do  ! pixels
+
+    AtNiA(2,1) = AtNiA(1,2)  ! symmetric
+
+    ! Add Gaussian prior if specified
+    sig_Q0  = fg_components(comp)%gauss_prior(1,2)
+    mean_Q0 = fg_components(comp)%gauss_prior(1,1)
+    sig_U0  = fg_components(comp)%gauss_prior(2,2)
+    mean_U0 = fg_components(comp)%gauss_prior(2,1)
+    if (sig_Q0 > 0.d0) then
+       AtNiA(1,1) = AtNiA(1,1) + 1.d0 / sig_Q0**2
+       AtNid(1)   = AtNid(1)   + mean_Q0 / sig_Q0**2
+    end if
+    if (sig_U0 > 0.d0) then
+       AtNiA(2,2) = AtNiA(2,2) + 1.d0 / sig_U0**2
+       AtNid(2)   = AtNid(2)   + mean_U0 / sig_U0**2
+    end if
+
+    ! Solve 2x2 system: cov = inv(AtNiA), mu = cov * AtNid
+    det_val = AtNiA(1,1)*AtNiA(2,2) - AtNiA(1,2)**2
+    if (abs(det_val) < 1.d-30) then
+       return  ! Singular — no data constraining Q0/U0
+    end if
+    cov(1,1) =  AtNiA(2,2) / det_val
+    cov(1,2) = -AtNiA(1,2) / det_val
+    cov(2,1) = cov(1,2)
+    cov(2,2) =  AtNiA(1,1) / det_val
+
+    mu(1) = cov(1,1)*AtNid(1) + cov(1,2)*AtNid(2)
+    mu(2) = cov(2,1)*AtNid(1) + cov(2,2)*AtNid(2)
+
+    if (trim(operation) == 'optimize') then
+       ! In optimize mode, return the posterior mean (ML solution) directly
+       Q0_new = mu(1)
+       U0_new = mu(2)
+    else
+       ! Draw from 2D Gaussian: x = mu + L * z, where L = Cholesky(cov)
+       L11 = sqrt(max(cov(1,1), 0.d0))
+       if (L11 > 0.d0) then
+          L21 = cov(2,1) / L11
+       else
+          L21 = 0.d0
+       end if
+       L22 = sqrt(max(cov(2,2) - L21**2, 0.d0))
+
+       z1 = rand_gauss(handle)
+       z2 = rand_gauss(handle)
+       Q0_new = mu(1) + L11 * z1
+       U0_new = mu(2) + L21 * z1 + L22 * z2
+    end if
+
+    ! Clamp to uniform prior bounds
+    Q0_new = max(min(Q0_new, fg_components(comp)%priors(1,2)), fg_components(comp)%priors(1,1))
+    U0_new = max(min(U0_new, fg_components(comp)%priors(2,2)), fg_components(comp)%priors(2,1))
+
+    ! Update parameter map for all pixels in region
+    do ii = 1, region%n
+       par_map(region%pix(ii,1), region%pix(ii,2), p_Q0)   = Q0_new
+       par_map(region%pix(ii,1), region%pix(ii,2), p_Q0+1) = U0_new
+    end do
+
+  end subroutine sample_QU_block_region
 
 end module comm_fg_mod

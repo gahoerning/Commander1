@@ -1949,10 +1949,18 @@ contains
     unit   = getlun()
     fg_amp = 0.d0
     do i = 1, num_fg_comp
-       if (trim(fg_components(i)%type) == 'freefree_EM') then
-          fg_amp(:,:,i) = 1.d0
-          cycle
-       end if
+      if (trim(fg_components(i)%type) == 'freefree_EM' .or. trim(fg_components(i)%type) == 'fixed_index_template') then
+         fg_amp(:,:,i) = 1.d0
+         cycle
+      else if (trim(fg_components(i)%type) == 'power_law_faraday' .or. &
+           & trim(fg_components(i)%type) == 'power_law_faraday_BS') then
+         ! Polarisation-only component: fg_amp=1 for Q,U; 0 for I
+         ! Actual amplitudes (Q0, U0) are in the spectral parameters
+         fg_amp(:,1,i) = 0.d0
+         fg_amp(:,2,i) = 1.d0
+         fg_amp(:,3,i) = 1.d0
+         cycle
+      end if
 
        call int2string(i, i_text)
        call get_parameter(paramfile, 'INITIAL_AMPLITUDE_MAP'//i_text, par_string=filename, path=base_path)
@@ -2134,13 +2142,22 @@ contains
           end if
           do k = 1, n
              map = 0.d0
-             do p = 0, npix-1
-                if (any(mask(p,2:3,:)==1.d0)) then
-                   map(p,1) = sqrt(s_i%fg_amp(p,2,i)**2+s_i%fg_amp(p,3,i)**2) * &
-                        & get_ideal_fg_spectrum(fg_components(i), &
-                        & par_smooth(p,1,j:j+fg_components(i)%npar-1), nu(k))
-                end if
-             end do
+              do p = 0, npix-1
+                 if (any(mask(p,2:3,:)==1.d0)) then
+                    if (trim(fg_components(i)%type) == 'power_law_faraday' .or. &
+                         & trim(fg_components(i)%type) == 'power_law_faraday_BS') then
+                       ! Faraday rotation preserves |P| = sqrt(Q0^2+U0^2) * S(nu)
+                       ! Q0 = par_smooth(p,1,j), U0 = par_smooth(p,1,j+1),
+                       ! beta = par_smooth(p,1,j+2)
+                       map(p,1) = sqrt(par_smooth(p,1,j)**2 + par_smooth(p,1,j+1)**2) * &
+                            & (nu(k)/fg_components(i)%nu_ref)**par_smooth(p,1,j+2)
+                    else
+                       map(p,1) = sqrt(s_i%fg_amp(p,2,i)**2+s_i%fg_amp(p,3,i)**2) * &
+                            & get_ideal_fg_spectrum(fg_components(i), &
+                            & par_smooth(p,1,j:j+fg_components(i)%npar-1), nu(k))
+                    end if
+                 end if
+              end do
              mu     = sum(map(:,1)*mask(:,2,1)) / sum(mask(:,2,1))
              f(k,1) = log(max(sqrt(sum((map(:,1)*mask(:,2,1)-mu)**2) / (sum(mask(:,2,1))-1.d0)),1.d-30))
              mu     = sum(map(:,1)*mask(:,2,2)) / sum(mask(:,2,2))
