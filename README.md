@@ -7,3 +7,7 @@ For running on the ITA cluster using the latest compilers, set
 Note that the `HEALPix` and `cfitsio` libraries are currently installed in `/mn/stornext/u3/duncanwa/Commander/build_owl3637_oneapi_Release`. This subject to change, so be aware that these lines may need to be changed in `config/config.ita_ifx`.
 
 `module load intel/oneapi compiler/latest mpi/latest mkl/latest` should also be called before running `make`.
+
+Foreground-based colour corrections and the configurable update interval are described in
+[docs/color-corrections.md](docs/color-corrections.md). A C-BASS parameter fragment is in
+[examples/color-corrections-cbass.par](examples/color-corrections-cbass.par).

@@ -1,0 +1,124 @@
+module healpix_types
+  implicit none
+  integer, parameter :: dp=kind(1.d0), sp=kind(1.e0), i4b=kind(1), lgt=kind(.true.)
+end module healpix_types
+
+module color_test_context
+  use healpix_types
+  use comm_color_correction_mod
+  use, intrinsic :: ieee_arithmetic
+  implicit none
+  integer, parameter :: num_recent_point=3, N_RMS_MARG=7
+  integer, parameter :: MPI_COMM_WORLD=0, MPI_DOUBLE_PRECISION=1, MPI_SUM=2, MPI_INTEGER=3, MPI_IN_PLACE=-1
+@TYPES@
+  type(fg_meta_data), allocatable :: fg_components(:)
+  type(bandinfo), allocatable :: bp(:)
+  integer :: num_fg_comp=4, num_fg_par=8, npix=2, nmaps=3, numband=2
+  integer :: myid_chain=0, root=0, numprocs_chain=1, comm_chain=0, handle=0
+  logical :: sample_T_modes=.true.
+  real(sp), parameter :: missval=-1.6375e30
+  character(len=16) :: operation='optimize'
+  character(len=40) :: config_mode='auto'
+  interface mpi_allreduce
+    module procedure reduce_real, reduce_int
+  end interface
+contains
+@PROCEDURES@
+
+  ! Test doubles below: no actual communication, smoothing or external file I/O.
+  subroutine mpi_bcast(a,n,t,r,c,ierr)
+    real(dp), intent(inout) :: a(:,:,:)
+    integer, intent(in) :: n,t,r,c
+    integer, intent(out) :: ierr
+    ierr=0
+  end subroutine
+  subroutine reduce_real(in_place,a,n,t,op,c,ierr)
+    integer, intent(in) :: in_place,n,t,op,c
+    real(dp), intent(inout) :: a(:,:)
+    integer, intent(out) :: ierr
+    ierr=0
+  end subroutine
+  subroutine reduce_int(a,b,n,t,op,c,ierr)
+    integer, intent(in) :: a(:),n,t,op,c
+    integer, intent(out) :: b(:),ierr
+    b=a
+    ierr=0
+  end subroutine
+  subroutine mpi_abort(c,code,ierr)
+    integer, intent(in) :: c,code
+    integer, intent(out) :: ierr
+    print *, 'EXPECTED_CONFIG_ABORT'
+    error stop 1
+  end subroutine
+  subroutine get_smooth_par_map(a,b)
+    real(dp), intent(in) :: a(:,:,:)
+    real(dp), intent(out) :: b(:,:,:)
+    b=a
+  end subroutine
+  real(dp) function get_ideal_fg_spectrum(comp,p,nu)
+    type(fg_meta_data), intent(in) :: comp
+    real(dp), intent(in) :: p(:),nu
+    if (trim(comp%type) /= 'power_law') error stop 'unexpected SED in fixture'
+    get_ideal_fg_spectrum=compute_power_law_spectrum(nu,comp%nu_ref,p(1),p(2),comp%p_rms)
+  end function
+  real(dp) function ant2data(band)
+    integer, intent(in) :: band
+    ant2data=bp(band)%a2t
+  end function
+  real(dp) function splint(x,y,y2,p)
+    real(dp), intent(in) :: x(:),y(:),y2(:),p
+    splint=123.d0
+  end function
+  real(dp) function splint_deriv(x,y,y2,p)
+    real(dp), intent(in) :: x(:),y(:),y2(:),p
+    splint_deriv=0.d0
+  end function
+  real(dp) function splin2_full_precomp(x,y,table,a,b)
+    real(dp), intent(in) :: x(:),y(:),table(:,:,:,:),a,b
+    splin2_full_precomp=123.d0
+  end function
+  real(dp) function compute_CO_multiline_spectrum(band,bands,nu,p,deriv)
+    integer, intent(in) :: band,bands(:)
+    real(dp), intent(in) :: nu,p(:)
+    logical, intent(in), optional :: deriv
+    compute_CO_multiline_spectrum=17.d0
+  end function
+  real(dp) function get_bp_avg_spectrum(band,s)
+    integer, intent(in) :: band
+    real(dp), intent(in) :: s(:)
+    get_bp_avg_spectrum=sum(s)/size(s)
+  end function
+  real(dp) function rand_gauss(h)
+    integer, intent(inout) :: h
+    rand_gauss=0.d0
+  end function
+  subroutine int2string(i,s)
+    integer, intent(in) :: i
+    character(len=*), intent(out) :: s
+    write(s,'(i2.2)') i
+  end subroutine
+  subroutine get_parameter(file,key,par_dp,par_present)
+    character(len=*), intent(in) :: file,key
+    real(dp), intent(inout) :: par_dp
+    logical, intent(out), optional :: par_present
+    logical :: found
+    found=.true.
+    if (index(key,'COLOR_CORR_C0_')==1) then
+       par_dp=1.d0
+       if (config_mode=='nonfinite_coeff') par_dp=ieee_value(0.d0,ieee_quiet_nan)
+    else if (index(key,'COLOR_CORR_C1_')==1 .or. index(key,'COLOR_CORR_C2_')==1) then
+       par_dp=0.d0
+    else if (index(key,'COLOR_CORR_FREQ_MIN')==1 .and. &
+         & (config_mode=='explicit' .or. config_mode=='missing_limit' .or. config_mode=='invalid_limits')) then
+       par_dp=4.d0
+    else if (index(key,'COLOR_CORR_FREQ_MAX')==1 .and. &
+         & (config_mode=='explicit' .or. config_mode=='invalid_limits')) then
+       par_dp=8.d0
+       if (config_mode=='invalid_limits') par_dp=3.d0
+    else
+       found=.false.
+    end if
+    if (present(par_present)) par_present=found
+    if (.not. found .and. .not. present(par_present)) error stop 'missing fixture parameter'
+  end subroutine
+end module color_test_context

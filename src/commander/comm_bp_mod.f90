@@ -2,6 +2,7 @@ module comm_bp_mod
   use healpix_types
   use comm_utils
   use sort_utils
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   implicit none 
 
   real(dp), parameter :: k_B      = 1.3806503d-23
@@ -23,18 +24,86 @@ module comm_bp_mod
      real(dp), allocatable, dimension(:) :: nu0, nu, tau0, tau
      ! Color correction fields
      logical(lgt)      :: use_color_corr
-     integer(i4b)      :: cc_comp         ! Reference component index
-     real(dp)          :: cc_coeffs(3)    ! Polynomial [c0, c1, c2]
+     real(dp)          :: cc_coeffs(3,3) ! [A,B,C] for I,Q,U; argument is flux index alpha
+     real(dp)          :: cc_nu_low, cc_nu_high, cc_min_signal
+     real(dp), allocatable :: cc_factor(:,:), cc_alpha(:,:)
   end type bandinfo
 
   real(dp)                                      :: ind_iras                                     
   integer(i4b)                                  :: numband
+  integer(i4b)                                  :: color_corr_update_interval = 1
   type(bandinfo),     allocatable, dimension(:) :: bp
   integer(i4b),       allocatable, dimension(:) :: i2f
 
   character(len=256), private  :: MJySr_convention
 
 contains
+
+  subroutine read_color_correction_parameters(paramfile, band, polar)
+    character(len=*), intent(in) :: paramfile
+    integer(i4b), intent(in) :: band
+    logical(lgt), intent(in) :: polar
+    character(len=2) :: band_text
+    character(len=1), parameter :: stokes(3) = ['I', 'Q', 'U']
+    character(len=1), parameter :: order(3) = ['0', '1', '2']
+    character(len=128) :: key
+    logical(lgt) :: have_low, have_high, found
+    integer(i4b) :: s, j, nstokes, ierr
+
+    call int2string(band, band_text)
+    bp(band)%cc_coeffs = 0.d0
+    bp(band)%cc_coeffs(1,:) = 1.d0
+    nstokes = 1
+    if (polar) nstokes = 3
+    do s = 1, nstokes
+       do j = 1, 3
+          key = 'COLOR_CORR_C' // order(j) // '_' // stokes(s) // band_text
+          call get_parameter(paramfile, trim(key), par_dp=bp(band)%cc_coeffs(j,s))
+       end do
+    end do
+    bp(band)%cc_min_signal = 1.d-12 ! uK_RJ; undefined slopes use K=1 and are counted
+    call get_parameter(paramfile, 'COLOR_CORR_MIN_SIGNAL' // band_text, &
+         & par_dp=bp(band)%cc_min_signal, par_present=found)
+    call get_parameter(paramfile, 'COLOR_CORR_FREQ_MIN' // band_text, &
+         & par_dp=bp(band)%cc_nu_low, par_present=have_low)
+    call get_parameter(paramfile, 'COLOR_CORR_FREQ_MAX' // band_text, &
+         & par_dp=bp(band)%cc_nu_high, par_present=have_high)
+    if (have_low .neqv. have_high) then
+       write(*,*) 'Color corrections require both FREQ_MIN and FREQ_MAX, band ', band
+       call mpi_abort(MPI_COMM_WORLD, 1, ierr)
+    end if
+    if (have_low) then
+       bp(band)%cc_nu_low = bp(band)%cc_nu_low * 1.d9
+       bp(band)%cc_nu_high = bp(band)%cc_nu_high * 1.d9
+    else
+       ! Use the support of the input bandpass, after its normal loading threshold.
+       if (.not. any(bp(band)%tau0 > 0.d0)) then
+          write(*,*) 'No positive bandpass support for color corrections, band ', band
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr)
+       end if
+       bp(band)%cc_nu_low = minval(bp(band)%nu0, mask=bp(band)%tau0 > 0.d0)
+       bp(band)%cc_nu_high = maxval(bp(band)%nu0, mask=bp(band)%tau0 > 0.d0)
+    end if
+    if (.not. all(ieee_is_finite(bp(band)%cc_coeffs)) .or. &
+         & .not. ieee_is_finite(bp(band)%cc_min_signal) .or. &
+         & .not. ieee_is_finite(bp(band)%cc_nu_low) .or. &
+         & .not. ieee_is_finite(bp(band)%cc_nu_high)) then
+       write(*,*) 'Non-finite color-correction configuration, band ', band
+       call mpi_abort(MPI_COMM_WORLD, 1, ierr)
+    end if
+    if (bp(band)%cc_nu_low <= 0.d0 .or. bp(band)%cc_nu_high <= bp(band)%cc_nu_low .or. &
+         & bp(band)%cc_min_signal < 0.d0) then
+       write(*,*) 'Invalid color-correction limits, band ', band
+       write(*,*) 'Require 0 < FREQ_MIN < FREQ_MAX; delta bands need explicit limits (GHz).'
+       call mpi_abort(MPI_COMM_WORLD, 1, ierr)
+    end if
+    if (bp(band)%delta_rms > 0.d0) then
+       write(*,*) 'Color-correction coefficients describe a fixed bandpass, band ', band
+       write(*,*) 'Set BP_RMS=0 for this band; polynomial corrections replace bandpass integration.'
+       call mpi_abort(MPI_COMM_WORLD, 1, ierr)
+    end if
+  end subroutine read_color_correction_parameters
+
 
 
   subroutine initialize_bp_mod(myid, chain, comm_chain, paramfile, handle)
@@ -45,7 +114,7 @@ contains
     type(planck_rng), intent(inout) :: handle
 
     integer(i4b)        :: i, j, q, unit, myid_chain
-    logical(lgt)        :: exist, apply_bp_corr, apply_gain_corr, apply_color_corr
+    logical(lgt)        :: exist, apply_bp_corr, apply_gain_corr, apply_color_corr, found, polar
     real(dp)            :: threshold, gain_init_rms, bp_init_rms, ierr
     character(len=2)    :: i_text
     character(len=256)  :: filename, chaindir, gain_init_file, bp_init_file, MJySr_convention
@@ -65,7 +134,22 @@ contains
     call get_parameter(paramfile, 'MJYSR_CONVENTION',       par_string=MJysr_convention)
     call get_parameter(paramfile, 'APPLY_BP_CORRECTIONS',   par_lgt=apply_bp_corr)
     call get_parameter(paramfile, 'APPLY_GAIN_CORRECTIONS', par_lgt=apply_gain_corr)
-    call get_parameter(paramfile, 'APPLY_COLOR_CORRECTIONS', par_lgt=apply_color_corr)
+    apply_color_corr = .false.
+    call get_parameter(paramfile, 'APPLY_COLOR_CORRECTIONS', par_lgt=apply_color_corr, par_present=found)
+    call get_parameter(paramfile, 'POLARIZATION', par_lgt=polar)
+    color_corr_update_interval = 1
+    if (apply_color_corr) then
+       call get_parameter(paramfile, 'COLOR_CORR_UPDATE_INTERVAL', &
+            & par_int=color_corr_update_interval, par_present=found)
+       if (color_corr_update_interval < 1) then
+          write(*,*) 'COLOR_CORR_UPDATE_INTERVAL must be at least 1.'
+          call mpi_abort(MPI_COMM_WORLD, 1, q)
+       end if
+       if (myid_chain == 0) then
+          write(*,*) 'Iterative sky color corrections; update interval = ', color_corr_update_interval
+          write(*,*) 'Corrections remain fixed between updates; this is an approximate sampling scheme.'
+       end if
+    end if
     call get_parameter(paramfile, 'GAIN_INIT_RMS',          par_dp=gain_init_rms)
     call get_parameter(paramfile, 'BP_INIT_RMS',            par_dp=bp_init_rms)
     if (trim(MJysr_convention) == 'PSM') then
@@ -98,19 +182,10 @@ contains
           bp(i)%delta_rms = 0.d0
        end if
 
-       ! Color correction: optional, default off
        bp(i)%use_color_corr = .false.
-       bp(i)%cc_comp        = 0
-       bp(i)%cc_coeffs      = 0.d0
        if (apply_color_corr) then
           call get_parameter(paramfile, 'USE_COLOR_CORRECTION' // i_text, &
                & par_lgt=bp(i)%use_color_corr)
-          if (bp(i)%use_color_corr) then
-             call get_parameter(paramfile, 'COLOR_CORR_COMPONENT' // i_text, par_int=bp(i)%cc_comp)
-             call get_parameter(paramfile, 'COLOR_CORR_C0' // i_text, par_dp=bp(i)%cc_coeffs(1))
-             call get_parameter(paramfile, 'COLOR_CORR_C1' // i_text, par_dp=bp(i)%cc_coeffs(2))
-             call get_parameter(paramfile, 'COLOR_CORR_C2' // i_text, par_dp=bp(i)%cc_coeffs(3))
-          end if
        end if
        if (trim(bp(i)%id) == 'delta') then
           filename = ''
@@ -144,6 +219,7 @@ contains
           bp(i)%nu0(1)  = bp(i)%nu_c
           bp(i)%tau0(1) = 1.d0
        end if
+       if (bp(i)%use_color_corr) call read_color_correction_parameters(paramfile, i, polar)
 
 !!$       allocate(a2t(bp(i)%n))
 !!$       call compute_ant2thermo(bp(i)%nu, a2t)

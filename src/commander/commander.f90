@@ -511,6 +511,7 @@ contains
        allocate(fg_param_map_prev(0:npix-1, nmaps, num_fg_par))
        call initialize_index_map(paramfile, rng_handle, fg_param_map)
        fg_param_map_prev = fg_param_map
+       call refresh_sky_color_corrections(s_i%fg_amp, fg_param_map)
        call update_fg_pix_response_maps(fg_param_map)
        if (.not. all(fg_pix_spec_response == fg_pix_spec_response)) then
           do j = 1, num_fg_comp
@@ -550,6 +551,16 @@ contains
        if (mod(iter,100) == 0) write(*,*) 'Chain no. ', chain, ' -- generating sample no. ', iter
        if (verbosity > 0) write(*,*) 'Chain no. ', chain, ' -- generating sample no. ', iter
        call cpu_time(t1)
+
+       ! Reconstruct colour corrections at the configured outer-iteration cadence.
+       ! Hold K fixed between updates in both sample and optimize modes. This is
+       ! not exact sampling of an amplitude-dependent response.
+       if (sample_fg_pix .and. any(bp%use_color_corr) .and. iter > first_iteration) then
+          if (mod(iter-first_iteration, color_corr_update_interval) == 0) then
+             call refresh_sky_color_corrections(s_i%fg_amp, fg_param_map)
+             call update_fg_pix_response_maps(fg_param_map)
+          end if
+       end if
 
        !call set_sample_temp_coeffs(iter >= 2)
        call set_sample_temp_coeffs(.true.)

@@ -70,8 +70,8 @@ contains
        call sample_gain(handle, map_id)
 
     else if (operation == 4) then
-       
-       ! Empty slot
+
+       call update_sky_color_corrections
 
     else if (operation == 5) then
        
@@ -279,6 +279,13 @@ contains
     call initialize_preconditioner(precond_type)
        
   end subroutine init_precond
+
+  subroutine refresh_sky_color_corrections(amplitudes, index_map)
+    real(dp), intent(in) :: amplitudes(0:,1:,1:), index_map(0:,1:,1:)
+    if (.not. any(bp%use_color_corr)) return
+    call mpi_bcast(4, 1, MPI_INTEGER, root, comm_chain, ierr)
+    call update_sky_color_corrections(amplitudes, index_map)
+  end subroutine refresh_sky_color_corrections
 
   ! Update response maps
   subroutine update_fg_pix_response_maps(index_map)

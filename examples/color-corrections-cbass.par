@@ -1,0 +1,22 @@
+# Parameter-file fragment, not a complete Commander run configuration.
+# C-BASS North averages at FREQ_C01 = 4.76 GHz (thesis Table 2.2).
+# Replace 01 with the relevant band index; disable corrections for other bands.
+APPLY_COLOR_CORRECTIONS = T
+COLOR_CORR_UPDATE_INTERVAL = 10
+USE_COLOR_CORRECTION01 = T
+
+# Illustrative endpoint overrides in GHz; use the limits for your data.
+# Both are required for a delta band; omit both to use a measured bandpass.
+COLOR_CORR_FREQ_MIN01 = 4.5
+COLOR_CORR_FREQ_MAX01 = 5.5
+COLOR_CORR_MIN_SIGNAL01 = 1.0e-12
+
+COLOR_CORR_C0_I01 = 0.99970
+COLOR_CORR_C1_I01 = -0.00052
+COLOR_CORR_C2_I01 = 0.00127
+COLOR_CORR_C0_Q01 = 0.99776
+COLOR_CORR_C1_Q01 = -0.00716
+COLOR_CORR_C2_Q01 = 0.00090
+COLOR_CORR_C0_U01 = 1.00465
+COLOR_CORR_C1_U01 = 0.01650
+COLOR_CORR_C2_U01 = 0.00240

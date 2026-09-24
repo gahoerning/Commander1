@@ -1766,7 +1766,7 @@ contains
 
     integer(i4b) :: ii, jj, kk, pix, pol, nn
     real(dp)     :: beta_val, RM_val, Q0_new, U0_new
-    real(dp)     :: R_QQ, R_QU, d_Q, d_U, w_Q, w_U
+    real(dp)     :: R_QQ, R_QU, R_UQ, R_UU, d_Q, d_U, w_Q, w_U, factor_Q, factor_U
     real(dp)     :: AtNiA(2,2), AtNid(2), cov(2,2), mu(2), det_val
     real(dp)     :: Q_rot, U_rot
     real(dp), allocatable :: s_cos(:), s_sin(:)
@@ -1804,19 +1804,30 @@ contains
           ! Compute response coefficients for this band:
           ! Use compute_faraday_rotation with (Q0=1,U0=0) to get
           !   Q_out = S*cos(2dpsi), U_out = S*sin(2dpsi) at each bandpass point
-          nn = bp(kk)%n
-          allocate(s_cos(nn), s_sin(nn))
-          do jj = 1, nn
-             call compute_faraday_rotation(bp(kk)%nu(jj), fg_components(comp)%nu_ref, &
+          if (bp(kk)%use_color_corr) then
+             call compute_faraday_rotation(bp(kk)%nu_c, fg_components(comp)%nu_ref, &
                   & 1.d0, 0.d0, RM_val, beta_val, Q_rot, U_rot)
-             s_cos(jj) = Q_rot   ! S(nu)*cos(2*dpsi)
-             s_sin(jj) = U_rot   ! S(nu)*sin(2*dpsi)
-          end do
-          ! R_QQ = bp_avg[S*cos(2dpsi)] * gain  (also equals R_UU)
-          ! R_QU = -bp_avg[S*sin(2dpsi)] * gain (and R_UQ = +bp_avg[S*sin] * gain = -R_QU)
-          R_QQ = get_bp_avg_spectrum(kk, s_cos) * bp(kk)%gain
-          R_QU = -get_bp_avg_spectrum(kk, s_sin) * bp(kk)%gain
-          deallocate(s_cos, s_sin)
+             factor_Q = foreground_color_factor(kk, pix, 2) * ant2data(kk) * bp(kk)%gain
+             factor_U = foreground_color_factor(kk, pix, 3) * ant2data(kk) * bp(kk)%gain
+             R_QQ = Q_rot * factor_Q
+             R_QU = -U_rot * factor_Q
+             R_UQ = U_rot * factor_U
+             R_UU = Q_rot * factor_U
+          else
+             nn = bp(kk)%n
+             allocate(s_cos(nn), s_sin(nn))
+             do jj = 1, nn
+                call compute_faraday_rotation(bp(kk)%nu(jj), fg_components(comp)%nu_ref, &
+                     & 1.d0, 0.d0, RM_val, beta_val, Q_rot, U_rot)
+                s_cos(jj) = Q_rot
+                s_sin(jj) = U_rot
+             end do
+             R_QQ = get_bp_avg_spectrum(kk, s_cos) * bp(kk)%gain
+             R_QU = -get_bp_avg_spectrum(kk, s_sin) * bp(kk)%gain
+             R_UQ = -R_QU
+             R_UU = R_QQ
+             deallocate(s_cos, s_sin)
+          end if
 
           ! Inverse noise weights
           ! inv_N_rms is already N^{-1} = 1/sigma^2 (see comm_data_mod.f90 line 321);
@@ -1826,15 +1837,13 @@ contains
           if (fg_components(comp)%indmask(pix,2) < 0.5d0) w_Q = 0.d0
           if (fg_components(comp)%indmask(pix,3) < 0.5d0) w_U = 0.d0
 
-          ! Accumulate normal equations: A^T N^{-1} A and A^T N^{-1} d
-          ! Response matrix R = [[R_QQ, R_QU], [-R_QU, R_QQ]]
-          ! Column for Q0: [R_QQ, -R_QU]^T;  Column for U0: [R_QU, R_QQ]^T
-          AtNiA(1,1) = AtNiA(1,1) + w_Q * R_QQ**2  + w_U * R_QU**2
-          AtNiA(1,2) = AtNiA(1,2) + w_Q * R_QQ*R_QU - w_U * R_QU*R_QQ
-          AtNiA(2,2) = AtNiA(2,2) + w_Q * R_QU**2  + w_U * R_QQ**2
-
-          AtNid(1)   = AtNid(1) + w_Q * R_QQ * d_Q  - w_U * R_QU * d_U
-          AtNid(2)   = AtNid(2) + w_Q * R_QU * d_Q   + w_U * R_QQ * d_U
+          ! Separate Q/U bandpass polynomials give different response rows.
+          ! Accumulate A^T N^-1 A and A^T N^-1 d without assuming R_UU=R_QQ.
+          AtNiA(1,1) = AtNiA(1,1) + w_Q * R_QQ**2 + w_U * R_UQ**2
+          AtNiA(1,2) = AtNiA(1,2) + w_Q * R_QQ*R_QU + w_U * R_UQ*R_UU
+          AtNiA(2,2) = AtNiA(2,2) + w_Q * R_QU**2 + w_U * R_UU**2
+          AtNid(1) = AtNid(1) + w_Q * R_QQ * d_Q + w_U * R_UQ * d_U
+          AtNid(2) = AtNid(2) + w_Q * R_QU * d_Q + w_U * R_UU * d_U
        end do  ! bands
 
        if (allocated(fg_par%comp)) call deallocate_fg_params(fg_par)

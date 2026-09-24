@@ -2,7 +2,7 @@
 COBJS  := comm_system_backend.o comm_system_mod.o comm_utils.o \
 	  comm_bp_mod.o comm_task_mod.o comm_Cl_util_mod.o comm_genvec_mod.o \
           comm_S_mult_mod.o comm_beam_mod.o comm_N_mult_mod.o comm_S_mult_mod.o \
-          comm_fg_component_mod.o comm_data_mod.o comm_chisq_mod.o comm_fg_mod.o  \
+          comm_color_correction_mod.o comm_fg_component_mod.o comm_data_mod.o comm_chisq_mod.o comm_fg_mod.o  \
           comm_cgd_matmul_mod.o \
           comm_cgd_precond_mod.o comm_mp_mod.o \
           comm_cgd_mod.o comm_direct_sol_mod.o comm_Cl_sampling_mod.o comm_signal_mod.o \
@@ -20,7 +20,7 @@ comm_S_mult_mod.o : comm_utils.o
 comm_beam_mod.o : comm_utils.o
 comm_N_mult_mod.o : comm_utils.o
 comm_S_mult_mod.o : comm_utils.o
-comm_fg_component_mod.o :: comm_bp_mod.o
+comm_fg_component_mod.o :: comm_bp_mod.o comm_color_correction_mod.o
 comm_data_mod.o : comm_fg_component_mod.o comm_genvec_mod.o comm_N_mult_mod.o comm_beam_mod.o
 comm_chisq_mod.o : comm_data_mod.o
 comm_fg_mod.o    : comm_data_mod.o comm_task_mod.o

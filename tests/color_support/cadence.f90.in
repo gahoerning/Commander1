@@ -1,0 +1,68 @@
+program test_cadence
+  implicit none
+  type band_fixture
+     logical :: use_color_corr=.true.
+  end type
+  type state_fixture
+     real(8) :: fg_amp(1,1,1)=0.d0
+  end type
+  type(band_fixture) :: bp(1)
+  type(state_fixture) :: s_i
+  real(8) :: fg_param_map(1,1,1)=0.d0
+  integer :: iter, first_iteration=1, color_corr_update_interval
+  integer :: count_updates, response_updates, history(100)
+  logical :: sample_fg_pix=.true.
+  character(len=8) :: operation
+
+  operation='sample'
+  call run(10,31)
+  call check(count_updates==4,'interval 10 update count')
+  call check(all(history(1:4)==[1,11,21,31]),'interval 10 update schedule')
+  operation='optimize'
+  call run(10,31)
+  call check(count_updates==4,'optimize has same cadence')
+  call check(all(history(1:4)==[1,11,21,31]),'optimize schedule')
+  call run(1,5)
+  call check(count_updates==5,'default every outer iteration')
+  call check(all(history(1:5)==[1,2,3,4,5]),'interval 1 schedule')
+  call run(100,5)
+  call check(count_updates==1,'interval beyond run length initializes once')
+  bp(1)%use_color_corr=.false.
+  call run(1,5)
+  call check(count_updates==0,'disabled correction does not refresh')
+  print *, 'PASS: production outer-loop update cadence'
+contains
+  subroutine run(interval,iterations)
+    integer, intent(in) :: interval,iterations
+    color_corr_update_interval=interval
+    count_updates=0
+    response_updates=0
+    history=0
+    iter=first_iteration
+    ! The production initialization is unconditional, with the disabled-band
+    ! early return inside refresh_sky_color_corrections.
+    call refresh_sky_color_corrections(s_i%fg_amp,fg_param_map)
+    do iter=first_iteration,iterations
+@SCHEDULE@
+    end do
+    call check(response_updates==max(0,count_updates-1),'responses refreshed after K')
+  end subroutine
+  subroutine refresh_sky_color_corrections(amp,pars)
+    real(8), intent(in) :: amp(:,:,:),pars(:,:,:)
+    if (.not.any(bp%use_color_corr)) return
+    count_updates=count_updates+1
+    history(count_updates)=iter
+  end subroutine
+  subroutine update_fg_pix_response_maps(pars)
+    real(8), intent(in) :: pars(:,:,:)
+    response_updates=response_updates+1
+  end subroutine
+  subroutine check(ok,label)
+    logical, intent(in) :: ok
+    character(len=*), intent(in) :: label
+    if (.not.ok) then
+       print *, 'FAIL: ',label
+       error stop 1
+    end if
+  end subroutine
+end program test_cadence

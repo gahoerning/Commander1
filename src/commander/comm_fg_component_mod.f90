@@ -5,6 +5,7 @@ module comm_fg_component_mod
   use spline_2D_mod
   use sort_utils
   use comm_bp_mod
+  use comm_color_correction_mod, only: color_correction_factors
   implicit none
 
   integer(i4b), parameter          :: num_recent_point = 3
@@ -1278,6 +1279,129 @@ contains
 
 
   ! External interface
+  logical function color_corrected_component(comp)
+    type(fg_meta_data), intent(in) :: comp
+    ! CMB and spectral lines retain their original, separately integrated responses.
+    select case (trim(comp%type))
+    case ('cmb', 'CO_multiline', 'spectral_line')
+       color_corrected_component = .false.
+    case default
+       color_corrected_component = .true.
+    end select
+  end function color_corrected_component
+
+  function monochromatic_fg_spectrum(comp, pars, nu, stokes) result(value)
+    type(fg_meta_data), intent(in) :: comp
+    real(dp), intent(in) :: pars(:), nu
+    integer(i4b), intent(in) :: stokes
+    real(dp) :: value, q, u
+    ! Amplitudes are already converted to internal uK_RJ by init_fg_amps.
+    value = 0.d0
+    select case (trim(comp%type))
+    case ('power_law_faraday', 'power_law_faraday_BS')
+       if (stokes == 1) return
+       call compute_faraday_rotation(nu, comp%nu_ref, pars(1), pars(2), pars(4), pars(3), q, u)
+       if (stokes == 2) value = q
+       if (stokes == 3) value = u
+    case ('sz')
+       ! Unlike the other continuum SEDs, get_ideal_fg_spectrum returns an
+       ! unnormalised SZ spectrum. The amplitude is RJ temperature at nu_ref.
+       value = get_ideal_fg_spectrum(comp, pars, nu) / get_ideal_fg_spectrum(comp, pars, comp%nu_ref)
+    case ('cmb', 'CO_multiline', 'spectral_line')
+       ! Not part of the continuum used to determine the colour correction.
+       return
+    case default
+       value = get_ideal_fg_spectrum(comp, pars, nu)
+    end select
+  end function monochromatic_fg_spectrum
+
+  subroutine reconstruct_color_sky(pixel, nu, amplitudes, pars, sky)
+    integer(i4b), intent(in) :: pixel
+    real(dp), intent(in) :: nu, amplitudes(:,:)
+    type(fg_params), intent(in) :: pars
+    real(dp), intent(out) :: sky(3)
+    integer(i4b) :: comp, stokes
+    sky = 0.d0
+    do comp = 1, num_fg_comp
+       if (.not. color_corrected_component(fg_components(comp))) cycle
+       do stokes = 1, size(amplitudes,1)
+          if (stokes == 1 .and. .not. sample_T_modes) cycle
+          if (fg_components(comp)%mask(pixel,stokes) < 0.5d0) cycle
+          sky(stokes) = sky(stokes) + amplitudes(stokes,comp) * &
+               & monochromatic_fg_spectrum(fg_components(comp), pars%comp(comp)%p(stokes,:), nu, stokes)
+       end do
+    end do
+    ! Sum Q and U before computing P; summing component polarized intensities
+    ! would discard cancellation and frequency-dependent rotation of the mixture.
+  end subroutine reconstruct_color_sky
+
+  function foreground_color_factor(band, pixel, stokes) result(factor)
+    integer(i4b), intent(in) :: band, pixel, stokes
+    real(dp) :: factor
+    factor = 1.d0
+    ! Early setup constructs response maps before initial amplitudes are loaded.
+    if (allocated(bp(band)%cc_factor)) factor = bp(band)%cc_factor(pixel,stokes)
+  end function foreground_color_factor
+
+  subroutine update_sky_color_corrections(amplitudes_in, index_map_in)
+    real(dp), intent(in), optional :: amplitudes_in(0:,1:,1:), index_map_in(0:,1:,1:)
+    real(dp), allocatable :: amplitudes(:,:,:), params(:,:,:), previous(:,:)
+    real(dp) :: sky_low(3), sky_high(3), factors(3), alpha(3), max_change
+    integer(i4b) :: pixel, band, stokes, ierr, missing(3), total_missing(3)
+    logical :: valid(3)
+    type(fg_params) :: pars
+
+    if (.not. any(bp%use_color_corr)) return
+    allocate(amplitudes(0:npix-1,nmaps,num_fg_comp), params(0:npix-1,nmaps,num_fg_par))
+    if (myid_chain == root) then
+       amplitudes = amplitudes_in
+       call get_smooth_par_map(index_map_in, params)
+    end if
+    call mpi_bcast(amplitudes, size(amplitudes), MPI_DOUBLE_PRECISION, root, comm_chain, ierr)
+    call mpi_bcast(params, size(params), MPI_DOUBLE_PRECISION, root, comm_chain, ierr)
+    allocate(previous(0:npix-1,nmaps))
+    do band = 1, numband
+       if (.not. bp(band)%use_color_corr) cycle
+       if (.not. allocated(bp(band)%cc_factor)) then
+          allocate(bp(band)%cc_factor(0:npix-1,nmaps), bp(band)%cc_alpha(0:npix-1,nmaps))
+          bp(band)%cc_factor = 1.d0
+       end if
+       previous = bp(band)%cc_factor
+       bp(band)%cc_factor = 0.d0
+       bp(band)%cc_alpha = 0.d0
+       missing = 0
+       do pixel = myid_chain, npix-1, numprocs_chain
+          call reorder_fg_params(params(pixel,:,:), pars)
+          call reconstruct_color_sky(pixel, bp(band)%cc_nu_low, amplitudes(pixel,:,:), pars, sky_low)
+          call reconstruct_color_sky(pixel, bp(band)%cc_nu_high, amplitudes(pixel,:,:), pars, sky_high)
+          call color_correction_factors(sky_low, sky_high, bp(band)%cc_nu_low, bp(band)%cc_nu_high, &
+               & bp(band)%cc_coeffs, bp(band)%cc_min_signal, factors, alpha, valid)
+          do stokes = 1, nmaps
+             if (stokes == 1 .and. .not. sample_T_modes) cycle
+             bp(band)%cc_factor(pixel,stokes) = factors(stokes)
+             bp(band)%cc_alpha(pixel,stokes) = alpha(stokes)
+             if (.not. valid(stokes)) then
+                bp(band)%cc_alpha(pixel,stokes) = real(missval,dp)
+                missing(stokes) = missing(stokes) + 1
+             end if
+          end do
+          if (.not. sample_T_modes) bp(band)%cc_factor(pixel,1) = 1.d0
+       end do
+       call mpi_allreduce(MPI_IN_PLACE, bp(band)%cc_factor, size(bp(band)%cc_factor), &
+            & MPI_DOUBLE_PRECISION, MPI_SUM, comm_chain, ierr)
+       call mpi_allreduce(MPI_IN_PLACE, bp(band)%cc_alpha, size(bp(band)%cc_alpha), &
+            & MPI_DOUBLE_PRECISION, MPI_SUM, comm_chain, ierr)
+       call mpi_allreduce(missing, total_missing, 3, MPI_INTEGER, MPI_SUM, comm_chain, ierr)
+       max_change = maxval(abs(bp(band)%cc_factor-previous))
+       if (myid_chain == root) then
+          write(*,*) 'Color correction: band, max change in K, unity fallback counts (I,Q,U): ', &
+               & band, max_change, total_missing
+       end if
+    end do
+    if (allocated(pars%comp)) call deallocate_fg_params(pars)
+    deallocate(amplitudes, params, previous)
+  end subroutine update_sky_color_corrections
+
   function get_effective_fg_spectrum(fg_comp, band, fg_params, pixel, pol)
     implicit none
 
@@ -1315,6 +1439,18 @@ contains
              stop
           end if
        end do
+    end if
+
+    if (bp(band)%use_color_corr .and. color_corrected_component(fg_comp)) then
+       ! Replace bandpass integration by the monochromatic foreground times K(alpha).
+       ! K is frozen between scheduled updates and shared by all continuum components.
+       if (.not. present(pixel) .or. .not. present(pol)) then
+          write(*,*) 'Color-corrected spectra require a sky pixel and Stokes index.'
+          call mpi_abort(MPI_COMM_WORLD, 1, i)
+       end if
+       get_effective_fg_spectrum = monochromatic_fg_spectrum(fg_comp, fg_params, bp(band)%nu_c, pol) &
+            & * ant2data(band) * bp(band)%gain * foreground_color_factor(band, pixel, pol)
+       return
     end if
 
     if (trim(fg_comp%type) == 'CO_multiline') then
@@ -1388,7 +1524,7 @@ contains
     real(dp)                                               :: get_effective_deriv_fg_spectrum
 
     real(dp)     :: p_low, p_high, x, y, epsilon = 1d-6, delta = 1.d-10, S_eff_1, S_eff_2, nu, dnu
-    real(dp)     :: T_d, beta, C, p(2)
+    real(dp)     :: T_d, beta, C, p(2), p_cc(size(fg_params)), lo_cc, hi_cc
     integer(i4b) :: i, j, k, n, num_samp_point
     integer(i4b), dimension(2) :: bin
     real(dp),     allocatable, dimension(:,:) :: spectrum
@@ -1398,6 +1534,22 @@ contains
           get_effective_deriv_fg_spectrum = 0.d0
           return
        end if
+    end if
+
+    if (bp(band)%use_color_corr .and. color_corrected_component(fg_comp)) then
+       get_effective_deriv_fg_spectrum = 0.d0
+       if (fg_comp%npar == 0) return
+       delta = 1.d-5 * max(1.d0, abs(fg_params(par_id)))
+       lo_cc = max(fg_comp%priors(par_id,1), fg_params(par_id)-delta)
+       hi_cc = min(fg_comp%priors(par_id,2), fg_params(par_id)+delta)
+       if (hi_cc <= lo_cc) return
+       p_cc = fg_params
+       p_cc(par_id) = lo_cc
+       S_eff_1 = get_effective_fg_spectrum(fg_comp, band, p_cc, pixel=pixel, pol=pol)
+       p_cc(par_id) = hi_cc
+       S_eff_2 = get_effective_fg_spectrum(fg_comp, band, p_cc, pixel=pixel, pol=pol)
+       get_effective_deriv_fg_spectrum = (S_eff_2-S_eff_1)/(hi_cc-lo_cc)
+       return
     end if
 
     if (trim(fg_comp%type) == 'CO_multiline') then
@@ -2468,17 +2620,7 @@ contains
                               & fg_components(i)%par(k,1), fg_components(i)%par(l,2)) 
                       end if
                    end do
-                   ! Color correction: if enabled for this band and component is
-                   ! the CC reference, use cc(beta)*S(nu_c) instead of bandpass avg
-                   if (bp(m)%use_color_corr .and. bp(m)%cc_comp == i &
-                        & .and. trim(fg_components(i)%type) == 'power_law') then
-                      my_grid(k,l,m) = (bp(m)%cc_coeffs(1) + bp(m)%cc_coeffs(2) * fg_components(i)%par(k,1) &
-                           & + bp(m)%cc_coeffs(3) * fg_components(i)%par(k,1)**2) &
-                           & * compute_power_law_spectrum(bp(m)%nu_c, fg_components(i)%nu_ref, &
-                           & fg_components(i)%par(k,1), fg_components(i)%par(l,2), fg_components(i)%p_rms)
-                   else
-                      my_grid(k,l,m) = get_bp_avg_spectrum(m, s)
-                   end if
+                   my_grid(k,l,m) = get_bp_avg_spectrum(m, s)
                 end do
              end do
              deallocate(s)
@@ -2527,7 +2669,7 @@ contains
              else
                 fg_pix_spec_response(i,j,k) = &
                      & get_effective_fg_spectrum(fg_components(k), band, fg_par%comp(k)%p(j,:), &
-                     & pixel=i, pol=j)
+                     & pixel=pixels(i), pol=j)
              end if
           end do
        end do
