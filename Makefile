@@ -79,10 +79,14 @@ ifndef LAPACK_LINK
 endif
 
 
+# Keep standalone libsharp linking configurable. Legacy HEALPix builds may
+# set SHARP_LINK empty; other installations can supply a library search path.
+SHARP_LINK ?= -lsharp
+
 export F90COMP := $(F90FLAGS) -I../include $(LAPACK_INCLUDE) $(CFITSIO_INCLUDE) $(HEALPIX_INCLUDE)
 export FCOMP := $(FFLAGS)  $(LAPACK_INCLUDE) $(CFITSIO_INCLUDE) $(HEALPIX_INCLUDE)
 export CCOMP := $(CFLAGS)  $(LAPACK_INCLUDE) $(CFITSIO_INCLUDE) $(HEALPIX_INCLUDE)
-export LINK := -L../commander -L../include -lcommander -lcommander_healpix -lsharp $(HEALPIX_LINK) $(CFITSIO_LINK) $(LAPACK_LINK) $(LDFLAGS) $(F90OMPFLAGS)
+export LINK := -L../commander -L../include -lcommander -lcommander_healpix $(HEALPIX_LINK) $(SHARP_LINK) $(CFITSIO_LINK) $(LAPACK_LINK) $(LDFLAGS) $(F90OMPFLAGS)
 
 
 all : commander comm_process_resfiles

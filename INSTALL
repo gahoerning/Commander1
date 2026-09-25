@@ -33,3 +33,24 @@ $> make
 $> make install
 
 
+
+Optional standalone libsharp linking
+-----------------------------------
+
+By default the linker uses -lsharp, after the HEALPix libraries. Configure
+SHARP_LINK in config/config.<machine> if your HEALPix installation differs.
+For example, when libsharp is installed in a separate directory:
+
+export SHARP_LINK := -L/path/to/libsharp/lib -lsharp
+
+Legacy HEALPix installations that do not require a standalone libsharp library
+can leave this setting empty:
+
+export SHARP_LINK :=
+
+The equivalent one-run override is:
+
+make all SHARP_LINK=
+
+Changing only these link flags does not require make clean. If your installation
+does require libsharp, provide its actual library path instead of disabling it.
