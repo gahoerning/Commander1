@@ -1,0 +1,16 @@
+# Fragment, not a complete run configuration. Replace 01 with the S-PASS band index.
+# Approximate DR1 bandpass: uniform RJ-temperature weights in the two retained windows.
+# Input Stokes I map must already be in Rayleigh-Jeans microkelvin.
+POLARIZATION = F
+BANDPASS_TYPE01 = 'SPASS_RJ'
+BANDPASS01 = 'examples/bandpasses/spass_dr1_two_windows.dat'
+FREQ_C01 = 2.303
+FREQ_UNIT01 = 'uK_ant'
+# Automatic, internally consistent bandpass conversion factors.
+A2T01 = -1.0
+F2T01 = -1.0
+A2SZ01 = -1.0
+# Used when APPLY_COLOR_CORRECTIONS=T globally.
+USE_COLOR_CORRECTION01 = F
+# Used when APPLY_BP_CORRECTIONS=T globally; start with the assumed shape fixed.
+BP_RMS01 = 0.0

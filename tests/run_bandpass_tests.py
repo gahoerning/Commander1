@@ -71,6 +71,27 @@ def run():
                     raise RuntimeError(f'{mode}: expected rejection containing {error!r}\n{result.stdout}\n{result.stderr}')
                 print('PASS: rejected', mode)
 
+        # SPASS_RJ uses the same production module but a distinct RJ normalization.
+        sources[-1] = SUPPORT/'spass_integration.f90'
+        subprocess.run(command + list(map(str, sources)) + ['-o', str(exe)], cwd=tmp, check=True)
+        base.update(BANDPASS_TYPE01="'SPASS_RJ'", FREQ_C01='2.303', FREQ_LABEL01="'S-PASS I'",
+                    BANDPASS01=f"'{ROOT/'examples/bandpasses/spass_dr1_two_windows.dat'}'")
+        del base['BANDPASS_CAL_INDEX01']  # This convention has no calibrator spectral index.
+        for mode, changes, error in cases:
+            if mode in {'missing_index', 'nan_index', 'overflow_calibration'}:
+                continue
+            config = base | changes
+            params.write_text('\n'.join(f'{k} = {v}' for k,v in config.items() if v is not None)+'\n')
+            result = subprocess.run([str(exe), str(params), mode], cwd=tmp, capture_output=True, text=True)
+            if error is None:
+                if result.returncode:
+                    raise RuntimeError(result.stdout + result.stderr)
+                print(result.stdout.strip())
+            else:
+                if result.returncode == 0 or error not in result.stdout:
+                    raise RuntimeError(f'SPASS_RJ {mode}: expected {error!r}\n{result.stdout}\n{result.stderr}')
+                print('PASS: SPASS_RJ rejected', mode)
+
 
 if __name__ == '__main__':
     run()

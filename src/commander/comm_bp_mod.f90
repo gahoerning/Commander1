@@ -188,6 +188,76 @@ contains
   end subroutine normalize_cbass_bandpass
 
 
+  subroutine spass_rj_error(band, message)
+    integer(i4b), intent(in) :: band
+    character(len=*), intent(in) :: message
+    integer(i4b) :: ierr
+
+    write(*,*) 'SPASS_RJ band ', band, ': ', trim(message)
+    call mpi_abort(MPI_COMM_WORLD, 1, ierr)
+  end subroutine spass_rj_error
+
+
+  subroutine read_spass_rj_parameters(band, polar)
+    integer(i4b), intent(in) :: band
+    logical(lgt), intent(in) :: polar
+
+    if (polar) call spass_rj_error(band, 'Only Stokes I is supported; set POLARIZATION=F.')
+    if (trim(bp(band)%unit) /= 'uK_ant') &
+         & call spass_rj_error(band, 'FREQ_UNIT must be uK_ant (Rayleigh-Jeans microkelvin).')
+    if (bp(band)%use_color_corr) &
+         & call spass_rj_error(band, 'Set USE_COLOR_CORRECTION=F; SPASS_RJ already integrates the bandpass.')
+    if (.not. ieee_is_finite(bp(band)%nu_c) .or. bp(band)%nu_c <= 0.d0) &
+         & call spass_rj_error(band, 'FREQ_C must be finite and positive (GHz).')
+    if (.not. all(ieee_is_finite([bp(band)%a2t, bp(band)%f2t, bp(band)%a2sz])) .or. &
+         & any([bp(band)%a2t, bp(band)%f2t, bp(band)%a2sz] > 0.d0)) &
+         & call spass_rj_error(band, 'Set A2T, F2T and A2SZ <= 0 for automatic bandpass conversions.')
+  end subroutine read_spass_rj_parameters
+
+
+  subroutine normalize_spass_rj_bandpass(band)
+    ! Approximate the map as a weighted mean of RJ temperature: w = W / integral(W dnu).
+    ! This is an explicit calibration assumption, not a measured S-PASS response.
+    integer(i4b), intent(in) :: band
+    integer(i4b) :: n
+    real(dp) :: norm, response_cmb, response_sz
+    real(dp), allocatable :: a2t(:)
+
+    n = bp(band)%n
+    if (n < 2) call spass_rj_error(band, 'The bandpass needs at least two samples.')
+    if (.not. all(ieee_is_finite(bp(band)%nu)) .or. &
+         & .not. all(ieee_is_finite(bp(band)%tau))) &
+         & call spass_rj_error(band, 'Bandpass frequencies and responses must be finite.')
+    if (any(bp(band)%nu <= 0.d0) .or. &
+         & any(bp(band)%nu(2:n) <= bp(band)%nu(1:n-1))) &
+         & call spass_rj_error(band, 'Bandpass frequencies must be positive and strictly increasing.')
+    if (any(bp(band)%tau < 0.d0) .or. maxval(bp(band)%tau) <= 0.d0) &
+         & call spass_rj_error(band, 'Use nonnegative linear responses with nonzero support.')
+
+    bp(band)%tau = bp(band)%tau / maxval(bp(band)%tau)
+    norm = tsum(bp(band)%nu, bp(band)%tau)
+    if (.not. ieee_is_finite(norm) .or. norm <= 0.d0) &
+         & call spass_rj_error(band, 'Invalid bandpass normalization integral.')
+    bp(band)%tau = bp(band)%tau / norm
+    if (.not. all(ieee_is_finite(bp(band)%tau))) &
+         & call spass_rj_error(band, 'Non-finite normalized bandpass weights.')
+
+    ! Preserve the existing special-component and reference-unit conversion paths.
+    ! These factors do not add sky components or convert the input RJ map.
+    allocate(a2t(n))
+    call compute_ant2thermo(bp(band)%nu, a2t)
+    response_cmb = tsum(bp(band)%nu, bp(band)%tau/a2t)
+    response_sz = tsum(bp(band)%nu, bp(band)%tau/a2t * sz_thermo(bp(band)%nu))
+    if (.not. ieee_is_finite(response_cmb) .or. response_cmb <= 0.d0 .or. &
+         & .not. ieee_is_finite(response_sz) .or. abs(response_sz) <= tiny(1.d0)) &
+         & call spass_rj_error(band, 'Invalid band-integrated unit conversion.')
+    bp(band)%a2t = 1.d0 / response_cmb
+    bp(band)%f2t = bp(band)%a2t / (compute_bnu_prime_RJ_single(bp(band)%nu_c) * 1.d14)
+    bp(band)%a2sz = 1.d-6 / response_sz
+    deallocate(a2t)
+  end subroutine normalize_spass_rj_bandpass
+
+
   subroutine initialize_bp_mod(myid, chain, comm_chain, paramfile, handle)
     implicit none
     
@@ -275,6 +345,11 @@ contains
           call read_cbass_parameters(paramfile, i, polar)
           call get_parameter(paramfile, 'BANDPASS' // i_text, par_string=filename, path=base_path)
           threshold = 0.d0
+       else if (trim(bp(i)%id) == 'SPASS_RJ') then
+          call read_spass_rj_parameters(i, polar)
+          call get_parameter(paramfile, 'BANDPASS' // i_text, par_string=filename, path=base_path)
+          threshold = 0.d0
+          if (myid_chain == 0) write(*,*) 'SPASS_RJ: assumes a weighted mean of RJ temperature; band ', i
        else if (trim(bp(i)%id) == 'LFI') then
           call get_parameter(paramfile, 'BANDPASS'           // i_text, par_string=filename, path=base_path)
           threshold = 0.d0
@@ -292,7 +367,7 @@ contains
           threshold = 0.d0
        else 
           write(*,*) 'Error -- bandpass type not supported: ', trim(bp(i)%id)
-          write(*,*) '         Supported types are {delta, LFI, HFI_cmb, HFI_submm, PSM_LFI, WMAP, DIRBE, CBASS}'
+          write(*,*) '         Supported types are {delta, LFI, HFI_cmb, HFI_submm, PSM_LFI, WMAP, DIRBE, CBASS, SPASS_RJ}'
           stop
        end if
 
@@ -467,6 +542,10 @@ contains
 
           call normalize_cbass_bandpass(j)
 
+       else if (trim(bp(j)%id) == 'SPASS_RJ') then
+
+          call normalize_spass_rj_bandpass(j)
+
        else if (trim(bp(j)%id) == 'WMAP') then
           
           ! See Appendix E of Bennett et al. (2013) for details
@@ -599,7 +678,8 @@ contains
        ! Return single value
        hm = f * bp(band)%tau 
        get_bp_avg_spectrum = hm(1) 
-    else if (trim(bp(band)%id) == 'LFI' .or. trim(bp(band)%id) == 'CBASS') then
+    else if (trim(bp(band)%id) == 'LFI' .or. trim(bp(band)%id) == 'CBASS' .or. &
+         & trim(bp(band)%id) == 'SPASS_RJ') then
        get_bp_avg_spectrum = tsum(bp(band)%nu, bp(band)%tau * f)
     else if (trim(bp(band)%id) == 'HFI_cmb' .or. trim(bp(band)%id) == 'PSM_LFI') then
        get_bp_avg_spectrum = tsum(bp(band)%nu, bp(band)%tau * 2.d0*k_B*bp(band)%nu**2/c**2 * f)
@@ -630,7 +710,7 @@ contains
        return
     end if
 
-    if (trim(bp(band)%id) == 'CBASS') then
+    if (trim(bp(band)%id) == 'CBASS' .or. trim(bp(band)%id) == 'SPASS_RJ') then
        i = 2
        do while (bp(band)%nu(i) < nu .and. i < bp(band)%n)
           i = i+1
