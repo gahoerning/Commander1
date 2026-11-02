@@ -74,8 +74,8 @@ contains
        call update_sky_color_corrections
 
     else if (operation == 5) then
-       
-       ! Empty slot
+
+       call sample_fossil_global_block()
 
     else if (operation == 6) then
        
@@ -245,6 +245,14 @@ contains
 
   end subroutine compute_signal_maps
 
+  subroutine sample_fossil_globals(s, spectral)
+    type(genvec), intent(in) :: s
+    logical, intent(in) :: spectral
+    if (num_global_components==0) return
+    call mpi_bcast(5,1,MPI_INTEGER,root,comm_chain,ierr)
+    call sample_fossil_global_block(s,spectral)
+  end subroutine sample_fossil_globals
+
 
   ! Chi-square calculation
   subroutine compute_chisq(map_id, coeff, output_stats, chisq_fullsky, chisq_highlat, chisq_map, &
@@ -362,7 +370,7 @@ contains
 !!$  subroutine set_checkpoint(operation)
 !!$    implicit none
 !!$
-!!$    character(len=128), intent(in) :: operation
+!!$    character(len=*), intent(in) :: operation
 !!$
 !!$    call mpi_bcast(17, 1, MPI_INTEGER, root, comm_chain, ierr)
 !!$    call checkpoint_all_modules(operation)

@@ -132,7 +132,7 @@ contains
   subroutine initialize_direct_solution_mod(paramfile)
     implicit none
     
-    character(len=128), intent(in) :: paramfile
+    character(len=*), intent(in) :: paramfile
 
     real(dp), allocatable, dimension(:) :: x
     type(genvec) :: s

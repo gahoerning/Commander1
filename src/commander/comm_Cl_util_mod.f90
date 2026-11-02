@@ -26,12 +26,12 @@ contains
   subroutine initialize_Cl_util_mod(paramfile)
     implicit none
 
-    character(len=128),                   intent(in) :: paramfile
+    character(len=*),                   intent(in) :: paramfile
 
     integer(i4b)       :: i, j, k, l, ind, upper, lower, unit, mcmc_lmin(6)
     logical(lgt)       :: polarization, cl_binning, ok
     character(len=2)   :: label
-    character(len=128) :: filename, cl_prior_filename, t1
+    character(len=512) :: filename, cl_prior_filename, t1
     character(len=512) :: line
     character(len=1), allocatable, dimension(:) :: stat
     real(dp), allocatable, dimension(:) :: input_vals
@@ -129,14 +129,14 @@ contains
   subroutine initialize_ran_powspec(paramfile, rng_handle, cls_out)
     implicit none
 
-    character(len=128),                 intent(in)    :: paramfile
+    character(len=*),                 intent(in)    :: paramfile
     type(planck_rng),                   intent(inout) :: rng_handle
     real(dp),         dimension(0:,1:), intent(out)   :: cls_out
 
     real(dp)           :: val, disp_fac
     integer(i4b)       :: i, j, k, l, attempts, unit
     logical(lgt)       :: enforce_zero_cl, exist, condition_on_cl
-    character(len=256) :: filename, clfile
+    character(len=512) :: filename, clfile
     character(len=2048) :: line
     real(dp),     allocatable, dimension(:)     :: buffer, cl
     real(dp),     allocatable, dimension(:,:,:) :: cl_in

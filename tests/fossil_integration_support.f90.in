@@ -1,0 +1,219 @@
+module context
+  implicit none
+  integer,parameter :: dp=kind(1.d0),sp=kind(1.e0),dpc=kind((1.d0,0.d0)),i4b=kind(1),lgt=kind(.true.)
+  integer,parameter :: npix=4,nmaps=1,numband=3,numcomp=4,nspec=1,lmax=1,lmax_lowres=1,map_size=4
+  integer,parameter :: MPI_STATUS_SIZE=3,MPI_DOUBLE_PRECISION=1,MPI_LOGICAL=2,MPI_INTEGER=3,MPI_SUM=4
+  integer,parameter :: OUTSIDE_MASK=1
+  integer :: root=0,myid_chain=0,myid_alms=0,myid_data=0,comm_chain=0,comm_data=0,chain=1
+  integer :: num_fg_temp=4,num_fg_signal=2,num_fg_comp=2,num_signal=2,num_global_components=1
+  integer :: map_id=1,pixels(0:npix-1)=[0,1,2,3],verbosity=0,maxiter=100
+  logical :: enforce_zero_cl=.true.,exclude_pos_fg_amp=.false.,sample_fg_pix=.true.,sample_T_modes=.true.
+  logical :: sample_fg_temp=.true.,reduce_pix=.true.,fossil_exact_local_seds=.false.
+  logical :: mask(0:npix-1,nmaps)=.true.,fix_temp(4,numband)=.true.
+  real(dp) :: rel_tol=1.d-12,fwhm_lowres=96.d0,noiseamp(numband)=1.d0
+  real(dp) :: global_signal(numband)=[0.1d0,0.2d0,0.3d0]
+  real(dp) :: cmbmap(0:npix-1,nmaps),residual(0:npix-1,nmaps),signal_map(0:npix-1,nmaps)
+  real(dp) :: fg_temp(0:npix-1,nmaps,4),fg_pix_spec_response(0:npix-1,nmaps,2)
+  real(dp) :: cmbmaps_lowres(0:npix-1,nmaps,numband),residuals_lowres(0:npix-1,nmaps,numband)
+  real(dp) :: fg_temp_lowres(0:npix-1,nmaps,numband,4),invN_rms(0:npix-1,nmaps,2)
+  real(dp) :: captured_w(numband),captured_r(numband),cg_diagonal=2.d0
+  type component
+     logical :: enforce_positive_amplitude=.false.,sample_amplitudes=.true.
+     character(len=16) :: type='power_law'
+  end type
+  type(component) :: fg_components(2)
+  type genvec
+     real(dp),allocatable :: cmb_amp(:,:),temp_amp(:,:),fg_amp(:,:,:)
+  end type
+  interface mpi_bcast
+     module procedure bcast_bool,bcast_real2,bcast_real3
+  end interface
+contains
+@PROCEDURES@
+  subroutine broadcast_global_signal(comm)
+    integer :: comm
+  end subroutine
+  subroutine tolower(text)
+    character(len=*) :: text
+    integer :: i,c
+    do i=1,len(text)
+       c=iachar(text(i:i))
+       if (c>=iachar('A') .and. c<=iachar('Z')) text(i:i)=achar(c+32)
+    end do
+  end subroutine
+  subroutine update_fossil_globals(w,r,spectral)
+    real(dp) :: w(:),r(:)
+    logical :: spectral
+    captured_w=w; captured_r=r
+  end subroutine
+  subroutine bcast_bool(x,n,t,r,c,ierr)
+    logical :: x
+    integer :: n,t,r,c,ierr
+    ierr=0
+  end subroutine
+  subroutine bcast_real2(x,n,t,r,c,ierr)
+    real(dp) :: x(:,:)
+    integer :: n,t,r,c,ierr
+    ierr=0
+  end subroutine
+  subroutine bcast_real3(x,n,t,r,c,ierr)
+    real(dp) :: x(:,:,:)
+    integer :: n,t,r,c,ierr
+    ierr=0
+  end subroutine
+  subroutine mpi_reduce(x,y,n,t,op,r,c,ierr)
+    real(dp) :: x(:,:),y(:,:)
+    integer :: n,t,op,r,c,ierr
+    y=x; ierr=0
+  end subroutine
+  subroutine multiply_with_beam(alms)
+    real(dp) :: alms(:,:)
+  end subroutine
+  subroutine convert_harmonic_to_real_space(map,alms)
+    real(dp) :: map(:,:)
+    real(dp),optional :: alms(:,:)
+    map=0.4d0
+  end subroutine
+  real(dp) function spec2data(band,cmb)
+    integer :: band
+    logical :: cmb
+    spec2data=2.5d0
+  end function
+  subroutine compute_Au(x,y)
+    type(genvec) :: x,y
+    call genvec_set_equal(x,y)
+    y%cmb_amp=cg_diagonal*x%cmb_amp
+    y%fg_amp=cg_diagonal*x%fg_amp
+    y%temp_amp=cg_diagonal*x%temp_amp
+  end subroutine
+  subroutine compute_invM_u(x,y)
+    type(genvec) :: x,y
+    call genvec_set_equal(x,y)
+    y%cmb_amp=x%cmb_amp/cg_diagonal
+    y%fg_amp=x%fg_amp/cg_diagonal
+    y%temp_amp=x%temp_amp/cg_diagonal
+  end subroutine
+  subroutine multiply_by_inv_sqrt_S(flag,x)
+    logical :: flag
+    real(dp) :: x(:,:)
+  end subroutine
+  subroutine multiply_by_sqrt_S(flag,x)
+    logical :: flag
+    real(dp) :: x(:,:)
+  end subroutine
+  subroutine init_precond(i)
+    integer :: i
+  end subroutine
+  subroutine wall_time(t)
+    real(dp) :: t
+    call cpu_time(t)
+  end subroutine
+  subroutine output_maps_from_iteration(a,b,c,d,e,f,g)
+    integer :: a,b,c,d
+    character(len=*) :: e
+    real(dp) :: f(:,:),g
+  end subroutine
+  subroutine compute_sigma_l(x,cls)
+    real(dp) :: x(:,:),cls(:,:,:)
+    cls=0.d0
+  end subroutine
+  subroutine fossil_global_error(message)
+    character(len=*) :: message
+    print *,message
+    stop 1
+  end subroutine
+  subroutine check(value,expected,message)
+    real(dp) :: value,expected
+    character(len=*) :: message
+    if (abs(value-expected)>1.d-11*max(1.d0,abs(expected))) then
+       print *,message,value,expected
+       stop 1
+    end if
+  end subroutine
+end module
+
+program test
+  use context
+  implicit none
+  type(genvec) :: s,b,x
+  integer :: i,band,stat
+  character(len=:),allocatable :: tag
+  character(len=2048) :: long_line
+  character(len=512) :: parsed_path
+  logical :: found
+  real(dp) :: expected(0:npix-1),w(0:npix-1),full_r,part_r
+  call allocate_genvec(s)
+  cmbmap(:,1)=[10.d0,20.d0,30.d0,40.d0]
+  s%fg_amp(:,1,1)=[1.d0,2.d0,3.d0,4.d0]; s%fg_amp(:,1,2)=0.5d0
+  fg_temp=0.d0; fg_temp(:,1,1)=1.d0; s%temp_amp(1,:)=0.4d0
+  fg_pix_spec_response(:,1,1)=2.d0; fg_pix_spec_response(:,1,2)=3.d0
+  invN_rms=0.d0; invN_rms(:,1,OUTSIDE_MASK)=[1.d0,2.d0,0.d0,4.d0]
+  w=invN_rms(:,1,1)
+  expected=cmbmap(:,1)-0.4d0-2.d0*s%fg_amp(:,1,1)-1.5d0
+  call sample_fossil_global_block(s,.false.)
+  call check(captured_w(1),sum(w),'Global weight')
+  call check(captured_r(1),sum(w*expected),'Global residual excludes local sky once')
+  call check(sum(abs(captured_w(2:))),0.d0,'Other bands not replicated')
+  full_r=captured_r(1)
+  invN_rms(2:3,1,1)=0.d0
+  call sample_fossil_global_block(s,.false.); part_r=captured_r(1)
+  invN_rms(:,1,1)=w; invN_rms(0:1,1,1)=0.d0
+  call sample_fossil_global_block(s,.false.)
+  call check(part_r+captured_r(1),full_r,'Disjoint partition sums')
+  invN_rms(:,1,1)=w; noiseamp(1)=2.d0
+  call sample_fossil_global_block(s,.true.)
+  call check(captured_w(1),sum(w)/4.d0,'Noise variance weight')
+  noiseamp=1.d0
+
+  fg_components(2)%sample_amplitudes=.false.
+  call compute_residual(s,.false.)
+  do i=0,npix-1
+     call check(residual(i,1),cmbmap(i,1)-0.1d0-0.4d0-1.5d0,'CG frozen component subtraction')
+  end do
+  fg_components(2)%enforce_positive_amplitude=.true.; exclude_pos_fg_amp=.true.
+  call compute_residual(s,.false.)
+  call check(residual(0,1),8.d0,'Frozen positive component is subtracted only once')
+  fg_components(2)%enforce_positive_amplitude=.false.; exclude_pos_fg_amp=.false.
+  call compute_signal_map(s)
+  call check(signal_map(0,1),0.5d0,'Signal includes physical monopole')
+  enforce_zero_cl=.false.
+  call compute_signal_map(s)
+  call check(signal_map(0,1),1.5d0,'Root harmonic unit conversion')
+  myid_alms=1
+  call compute_signal_map(s)
+  call check(signal_map(0,1),1.5d0,'Worker harmonic unit conversion')
+  myid_alms=0; enforce_zero_cl=.true.
+
+  cmbmaps_lowres=10.d0;fg_temp_lowres=0.d0;fg_temp_lowres(:,:,:,1)=1.d0
+  call compute_lowres_residual(s)
+  do band=1,numband
+     call check(residuals_lowres(0,1,band),9.6d0-global_signal(band),'Spectral residual global subtraction')
+  end do
+  do i=1,131
+     call index2string(i,tag)
+     if (i<10) then
+        if (len(tag)/=2 .or. tag(1:1)/='0') stop 1
+     else if (i>=100) then
+        if (len(tag)/=3) stop 1
+     end if
+  end do
+  call index2string(100,tag)
+  if (tag/='100') stop 1
+  tag='/'//repeat('a',400)//'/map_FOSSIL_0050GHz_fwhm096arcmin_nside0128_MJy-sr_noisy.fits'
+  long_line="MAP100_0001 = '"//tag//"'"
+  call parse_parameter(long_line,'MAP100_0001',found,par_string=parsed_path)
+  if (.not. found .or. trim(parsed_path)/=tag) stop 1
+
+  call allocate_genvec(b);call allocate_genvec(x)
+  b%fg_amp=4.d0;stat=0
+  call draw_constrained_realization_by_CG(2,b,x,stat)
+  if (stat/=0) stop 1
+  call check(maxval(abs(x%fg_amp-2.d0)),0.d0,'CG exact one-step convergence')
+  b%fg_amp=0.d0;stat=0
+  call draw_constrained_realization_by_CG(2,b,x,stat)
+  call check(sum(abs(x%fg_amp)),0.d0,'CG zero RHS')
+  num_global_components=0;fossil_exact_local_seds=.true.;b%fg_amp=4.d0
+  call draw_constrained_realization_by_CG(2,b,x,stat)
+  call check(maxval(abs(x%fg_amp-2.d0)),0.d0,'No-globals exact-local CG')
+  print *,'PASS: production residuals, global sufficient statistics, fixed amplitudes, harmonic units, index tags and CG'
+end program

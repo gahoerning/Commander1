@@ -21,6 +21,7 @@ contains
 
   ! Routine for solving the big, difficult linear system,   Au = v,  Ax = b
   subroutine draw_constrained_realization_by_CG(precond_type, b, x_out, stat, init)
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     implicit none
     
     integer(i4b), intent(in)    :: precond_type
@@ -137,16 +138,26 @@ contains
 
     delta_new = genvec_dot_product(r,d)
     delta_0   = delta_new
+    if (num_global_components>0 .or. fossil_exact_local_seds) then
+       if (.not. ieee_is_finite(delta_0) .or. delta_0<0.d0) &
+            call fossil_global_error('Invalid initial CG residual norm.')
+    end if
     i         = 0
-    r_max     = 1.d30    
-    do while (i < 2 .or. (i < maxiter .and. (r_max > rel_tol)))
+    r_max     = 1.d30
+    if ((num_global_components>0 .or. fossil_exact_local_seds) .and. delta_0==0.d0) r_max=0.d0
+    do while ((num_global_components==0 .and. .not. fossil_exact_local_seds .and. i<2) .or. (i<maxiter .and. r_max>rel_tol))
 
        call wall_time(t1)
        call compute_Au(d, q)
        call wall_time(t2)
 !       write(*,*) 'wall Au = ', t2-t1
 
-       alpha = delta_new / genvec_dot_product(d, q)
+       d_A_d=genvec_dot_product(d,q)
+       if (num_global_components>0 .or. fossil_exact_local_seds) then
+          if (.not. ieee_is_finite(d_A_d) .or. d_A_d<=0.d0) &
+               call fossil_global_error('Invalid CG curvature in the local amplitude block.')
+       end if
+       alpha = delta_new / d_A_d
 
        call genvec_plus_times(x, alpha, d, temp_vec)
        call genvec_set_equal(temp_vec, x)
@@ -162,6 +173,10 @@ contains
        call compute_invM_u(r, s)
        delta_old = delta_new
        delta_new = genvec_dot_product(r, s)
+       if (num_global_components>0 .or. fossil_exact_local_seds) then
+          if (.not. ieee_is_finite(delta_new) .or. delta_new<0.d0) &
+               call fossil_global_error('Invalid updated CG residual norm.')
+       end if
        beta      = delta_new / delta_old
        call genvec_plus_times(s, beta, d, d)       
        i = i+1
@@ -222,6 +237,7 @@ contains
           end if
        end if
 
+       if (num_global_components>0 .or. fossil_exact_local_seds) r_max=sqrt(max(0.d0,delta_new)/delta_0)
        call wall_time(t2)
        if (verbosity > 2) then
           write(*,*) 'Chain no. ', chain, ' -- res = ', &
@@ -232,7 +248,7 @@ contains
     end do
 !    close(98)
 
-    if (i == maxiter) then
+    if (i == maxiter .and. (num_global_components==0 .and. .not. fossil_exact_local_seds .or. r_max>rel_tol)) then
        write(*,*) 'ERROR: Convergence in CG search not reached within maximum'
        write(*,*) '       number of iterations = ', maxiter
        stat = stat + 1
@@ -273,7 +289,7 @@ contains
     
     integer(i4b),                      intent(in)           :: chain_in
     integer(i4b),                      intent(in)           :: comm_chain, comm_data, comm_alms
-    character(len=128),                intent(in)           :: paramfile
+    character(len=*),                intent(in)           :: paramfile
 
     logical(lgt) :: polarization
 

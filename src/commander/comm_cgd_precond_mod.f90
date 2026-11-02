@@ -286,8 +286,10 @@ contains
        my_M_fg_pix = 0.d0
        do k = 1, num_fg_signal
           if (fg_components(k)%enforce_positive_amplitude) cycle
+          if ((num_global_components>0 .or. fossil_exact_local_seds) .and. .not. fg_components(k)%sample_amplitudes) cycle
           do l = 1, num_fg_signal
              if (fg_components(l)%enforce_positive_amplitude) cycle
+             if ((num_global_components>0 .or. fossil_exact_local_seds) .and. .not. fg_components(l)%sample_amplitudes) cycle
              do i = 0, map_size-1
                 call get_inv_N_sub_matrix(map_id, mask_state, i, inv_N)
                 do j = 1, nmaps
@@ -341,12 +343,12 @@ contains
     implicit none
 
     integer(i4b),        intent(in)  :: comm_chain_in, comm_data_in, comm_alms_in, comm_master
-    character(len=128),  intent(in)  :: paramfile, chain_dir
+    character(len=*),  intent(in)  :: paramfile, chain_dir
 
     integer(i4b) :: i, j, k, l, m, ii, jj, row, col, pos, incx, incy, ind, unit
     real(dp)     :: alpha, beta, t1, t2
     logical(lgt) :: polarization, exist, ok
-    character(len=128) :: method, filename
+    character(len=512) :: method, filename
 
     real(dp),     allocatable, dimension(:,:,:)   :: alms_noise
     real(dp),     allocatable, dimension(:,:)     :: fg_alms

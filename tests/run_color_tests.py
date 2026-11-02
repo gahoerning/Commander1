@@ -31,7 +31,7 @@ def run():
     sampler = (SRC / 'comm_fg_mod.f90').read_text()
     types = fg[fg.index('  type fg_par_comp'):fg.index('  integer(i4b)                     :: num_fg_comp')]
     bandtype = bp[bp.index('  type bandinfo'):bp.index('  real(dp)                                      :: ind_iras')]
-    funcs = ['color_corrected_component', 'monochromatic_fg_spectrum', 'reconstruct_color_sky',
+    funcs = ['direct_fossil_component', 'color_corrected_component', 'monochromatic_fg_spectrum', 'reconstruct_color_sky',
              'foreground_color_factor', 'update_sky_color_corrections', 'get_effective_fg_spectrum',
              'get_effective_deriv_fg_spectrum', 'reorder_fg_params', 'deallocate_fg_params',
              'compute_power_law_spectrum', 'compute_faraday_rotation', 'update_fg_pix_response_map']

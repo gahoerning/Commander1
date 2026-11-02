@@ -1,6 +1,6 @@
 
 COBJS  := comm_system_backend.o comm_system_mod.o comm_utils.o \
-	  comm_bp_mod.o comm_task_mod.o comm_Cl_util_mod.o comm_genvec_mod.o \
+	  comm_bp_mod.o comm_fossil_sed_mod.o comm_fossil_global_mod.o comm_task_mod.o comm_Cl_util_mod.o comm_genvec_mod.o \
           comm_S_mult_mod.o comm_beam_mod.o comm_N_mult_mod.o comm_S_mult_mod.o \
           comm_color_correction_mod.o comm_fg_component_mod.o comm_data_mod.o comm_chisq_mod.o comm_fg_mod.o  \
           comm_cgd_matmul_mod.o \
@@ -14,6 +14,7 @@ comm_system_mod.o : comm_system_backend.o
 comm_utils.o : comm_system_mod.o ../include/libcommander_healpix.a
 comm_task_mod.o : comm_utils.o
 comm_bp_mod.o : comm_utils.o
+comm_fossil_global_mod.o : comm_utils.o comm_bp_mod.o comm_fossil_sed_mod.o
 comm_Cl_util_mod.o : comm_utils.o
 comm_genvec_mod.o : comm_utils.o
 comm_S_mult_mod.o : comm_utils.o
@@ -21,7 +22,7 @@ comm_beam_mod.o : comm_utils.o
 comm_N_mult_mod.o : comm_utils.o
 comm_S_mult_mod.o : comm_utils.o
 comm_fg_component_mod.o :: comm_bp_mod.o comm_color_correction_mod.o
-comm_data_mod.o : comm_fg_component_mod.o comm_genvec_mod.o comm_N_mult_mod.o comm_beam_mod.o
+comm_data_mod.o : comm_fg_component_mod.o comm_genvec_mod.o comm_N_mult_mod.o comm_beam_mod.o comm_fossil_global_mod.o
 comm_chisq_mod.o : comm_data_mod.o
 comm_fg_mod.o    : comm_data_mod.o comm_task_mod.o
 comm_cgd_matmul_mod.o : comm_data_mod.o comm_S_mult_mod.o

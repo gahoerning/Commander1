@@ -1,0 +1,24 @@
+[
+  {
+    "file": "fossil_nside128_forecast_sample.par",
+    "stage": "forecast_sample",
+    "nside": 128,
+    "operation": "sample",
+    "chain_directory": "chains/fossil/nside128/forecast_sample_seed20261102",
+    "input_directory": "outputs/commander",
+    "manifest_signature": "1c51c281053c41a6596ef2ed1840e7365d5dcd9e40f02a04cf70f367e601e356",
+    "mpi_ranks": 131,
+    "iterations": 10000
+  },
+  {
+    "file": "fossil_nside64_forecast_sample.par",
+    "stage": "forecast_sample",
+    "nside": 64,
+    "operation": "sample",
+    "chain_directory": "chains/fossil/nside64/forecast_sample_seed20261102",
+    "input_directory": "outputs/commander",
+    "manifest_signature": "1c51c281053c41a6596ef2ed1840e7365d5dcd9e40f02a04cf70f367e601e356",
+    "mpi_ranks": 131,
+    "iterations": 10000
+  }
+]

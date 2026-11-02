@@ -25,7 +25,7 @@ module comm_N_mult_mod
   integer(i8b),                              private :: col_from, col_to, numpix
   type(planck_rng),                          private :: rng_handle
 
-  character(len=128)                                     :: noise_format
+  character(len=512)                                     :: noise_format
   real(dp),     allocatable, dimension(:,:,:)            :: invN_rms, sqrt_invN_rms
   real(dp),     allocatable, dimension(:,:),     private :: invN_dense, sqrt_invN_dense
   real(dp),     allocatable, dimension(:,:,:),   private :: invN_pixblock, sqrt_invN_pixblock
@@ -48,13 +48,14 @@ contains
     implicit none
 
     integer(i4b),       intent(in) :: map_id_in, comm_alms_in, comm_chain_in
-    character(len=128), intent(in) :: paramfile
+    character(len=*), intent(in) :: paramfile
 
     integer(i4b)       :: i, j, k, l, m, n, ind, ierr, map, pix, unit
     logical(lgt)       :: polarization, sample_inside_mask
     real(dp)           :: reg_noise, reg_scale
-    character(len=2)   :: map_text, i_text
-    character(len=128) :: noisefile, maskfile, paramtext
+    character(len=2) :: i_text
+    character(len=:), allocatable :: map_text
+    character(len=512) :: noisefile, maskfile, paramtext
     real(dp),     allocatable, dimension(:,:) :: noisemap, map_in
     real(dp),     allocatable, dimension(:,:) :: mask
 
@@ -70,7 +71,7 @@ contains
 
     ! Read general parameters
     map_id = map_id_in
-    call int2string(map_id, map_text)
+    call index2string(map_id, map_text)
     call get_parameter(paramfile, 'MASKFILE',                  par_string=maskfile, path=base_path)
     call get_parameter(paramfile, 'NOISE_FORMAT',              par_string=noise_format) 
     call get_parameter(paramfile, 'NSIDE',                     par_int=nside)       
@@ -137,7 +138,7 @@ contains
 
     else if (trim(noise_format) == 'dense_matrix') then
 
-       call int2string(map_id, map_text)
+       call index2string(map_id, map_text)
        call get_parameter(paramfile, 'INV_N_DENSE_ORDERING', par_int=inv_N_order)       
 
        ! Set up (linear) mask2map array
@@ -307,7 +308,7 @@ contains
 
     integer(i4b)     :: i, j, k, m, n, pix, map_size_in, ierr
     character(len=1) :: uplo
-    character(len=128) :: N_format_
+    character(len=512) :: N_format_
     real(dp)         :: t1, t2
     real(dp),     allocatable, dimension(:,:) :: map_glob
     real(dp),     allocatable, dimension(:)   :: map_lin, map_lin2, map_lin_glob

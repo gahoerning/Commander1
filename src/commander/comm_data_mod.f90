@@ -4,6 +4,7 @@ module comm_data_mod
   use comm_genvec_mod
   use comm_N_mult_mod
   use comm_beam_mod
+  use comm_fossil_global_mod
   implicit none
 
   ! *********************************************************************
@@ -34,7 +35,7 @@ module comm_data_mod
   logical(lgt),                           private :: enforce_zero_cl
   real(dp)                                        :: fwhm_lowres, corr_chisq_threshold
   real(dp),                               private :: reg_noise, reg_scale
-  character(len=128),                     private :: operation
+  character(len=512),                     private :: operation
 
   real(dp),     allocatable, dimension(:,:)       :: cmbmap, residual, foreground_map, tempamp, mask_lowres
   real(dp),     allocatable, dimension(:,:,:)     :: cmbmaps_lowres, residuals_lowres
@@ -52,7 +53,7 @@ contains
        & seed, map_id_in)
     implicit none
 
-    character(len=128),                intent(in)           :: paramfile
+    character(len=*),                intent(in)           :: paramfile
     integer(i4b),                      intent(in)           :: comm_data_in, comm_alms_in
     integer(i4b),                      intent(in)           :: comm_chain_in, seed
     integer(i4b),                      intent(in), optional :: map_id_in
@@ -62,12 +63,12 @@ contains
     logical(lgt)       :: bad, sample_foreground_templates, exist, sample_inside_mask
     real(dp)           :: S_eff, fwhm_degrade, my_reg_noise, my_reg_scale
     character(len=1)   :: i1
-    character(len=2)   :: i2
+    character(len=2) :: i2
     character(len=3)   :: i3
-    character(len=2)   :: map_text, temp_text
+    character(len=:), allocatable :: map_text, temp_text
     character(len=4)   :: nside_text, real_text
-    character(len=128) :: maskfile, maskfile_calib, cmbfile, rmsfile, filename
-    character(len=128) :: paramtext, maskfile_corr
+    character(len=512) :: maskfile, maskfile_calib, cmbfile, rmsfile, filename
+    character(len=512) :: paramtext, maskfile_corr
     character(len=512) :: temp_amp_file
     character(len=32)  :: label
     real(dp)           :: nu_eff
@@ -77,7 +78,7 @@ contains
     real(dp),           allocatable, dimension(:,:)   :: foreground_map_in, map_lowres!, my_beam
     real(dp),           pointer,     dimension(:,:)   :: pixwin
     logical(lgt),       allocatable, dimension(:,:)   :: mask_in
-    character(len=128), allocatable, dimension(:)     :: temp_names
+    character(len=512), allocatable, dimension(:)     :: temp_names
     integer(i4b), dimension(MPI_STATUS_SIZE)          :: status
 
     unit        = getlun()
@@ -98,7 +99,7 @@ contains
     if (myid_alms == root) then
 
        ! Read general parameters
-       call int2string(map_id_in, map_text)
+       call index2string(map_id_in, map_text)
        call get_parameter(paramfile, 'NSIDE',                     par_int=nside)
        call get_parameter(paramfile, 'LMAX',                      par_int=lmax)
        call get_parameter(paramfile, 'POLARIZATION',              par_lgt=polarization)
@@ -144,7 +145,7 @@ contains
 
           ! Read foreground template filenames
           do j = 1, num_fg_temp
-             call int2string(j,temp_text)
+             call index2string(j,temp_text)
              paramtext = 'FG_TEMPLATE' // map_text // '_' // temp_text
              call get_parameter(paramfile, trim(paramtext), &
                   & par_string=temp_names(j), path=base_path)
@@ -298,7 +299,7 @@ contains
        fg_temp_lowres = 0.d0
        inv_N_lowres  = 0.d0
        do i = 1, numband
-          call int2string(i, map_text)
+          call index2string(i, map_text)
 
           paramtext = 'NOISE_RMS' // map_text
           call get_parameter(paramfile, trim(paramtext), par_string=rmsfile, path=base_path)
@@ -333,7 +334,7 @@ contains
 
              ! Read foreground templates
              do j = 1, num_fg_temp-num_md_temp
-                call int2string(j,temp_text)
+                call index2string(j,temp_text)
                 paramtext = 'FG_TEMPLATE' // map_text // '_' // temp_text
                 call get_parameter(paramfile, trim(paramtext), par_string=filename, path=base_path)
                 call read_map(filename, map_in)
@@ -374,6 +375,9 @@ contains
         tempamp = 0.d0
      end if
 
+     if ((num_global_components>0 .or. fossil_exact_local_seds) .and. any(tempamp/=0.d0)) &
+          call fossil_global_error('FOSSIL instrumental template amplitudes must initialize at zero.')
+
   end subroutine initialize_data_mod
 
 
@@ -384,14 +388,14 @@ contains
     integer(i4b),     intent(in) :: realization_id
 
     integer(i4b)       :: ierr, i, j, k
-    character(len=2)   :: map_text
+    character(len=:), allocatable :: map_text
     character(len=4)   :: realization_text
-    character(len=128) :: cmbfile, paramtext
+    character(len=512) :: cmbfile, paramtext
     real(dp)           :: my_reg_scale, my_reg_noise
     real(dp), allocatable, dimension(:,:) :: map_in, weights
     complex(dpc), allocatable, dimension(:,:,:) :: alms
 
-    call int2string(map_id, map_text)
+    call index2string(map_id, map_text)
     call int2string(realization_id, realization_text)
     
     ! Get filenames
@@ -418,7 +422,7 @@ contains
        if (num_fg_comp > 0) then
           allocate(map_in(0:npix-1,nmaps))
           do i = 1, numband
-             call int2string(i, map_text)
+             call index2string(i, map_text)
              paramtext = 'REG_NOISE_SCALE' // map_text
              call get_parameter(paramfile, trim(paramtext), par_dp=my_reg_scale)
              paramtext = 'REGULARIZATION_NOISE'
@@ -523,6 +527,12 @@ contains
        end do
     end do
 
+    if (num_global_components>0) then
+       do i=1,numband
+          residuals_lowres(:,1,i)=residuals_lowres(:,1,i)-global_signal(i)
+       end do
+    end if
+
     !deallocate(alms, gb, map)
 
   end subroutine compute_lowres_residual
@@ -579,7 +589,7 @@ contains
 
     integer(i4b) :: i, j, ierr
     logical(lgt) :: sub_signal
-    character(len=2) :: band
+    character(len=:), allocatable :: band
     real(dp), allocatable, dimension(:,:) :: a, my_coeff
  
     if (myid_chain == root) sub_signal = subtract_signal
@@ -587,6 +597,9 @@ contains
   
     residual = cmbmap
     if (sub_signal) residual = residual - signal_map
+    call broadcast_global_signal(comm_chain)
+    if ((num_global_components>0 .or. fossil_exact_local_seds) .and. .not. sub_signal) &
+         residual(:,1)=residual(:,1)-global_signal(map_id)
 
     ! Distribute foreground amplitudes
     if (num_fg_temp > 0) then
@@ -599,10 +612,11 @@ contains
        deallocate(my_coeff)
     end if
 
-    if (exclude_pos_fg_amp) then
+    if (exclude_pos_fg_amp .or. num_global_components>0 .or. fossil_exact_local_seds) then
        allocate(a(0:npix-1,nmaps))
        do i = 1, num_fg_comp
-          if (fg_components(i)%enforce_positive_amplitude) then
+          if ((exclude_pos_fg_amp .and. fg_components(i)%enforce_positive_amplitude) .or. &
+               ((num_global_components>0 .or. fossil_exact_local_seds) .and. .not. fg_components(i)%sample_amplitudes)) then
              if (present(s)) a = s%fg_amp(:,:,i)
              call mpi_bcast(a, size(a), MPI_DOUBLE_PRECISION, root, comm_chain, ierr)
              residual = residual - fg_pix_spec_response(:,:,i) * a(pixels,:)
@@ -611,7 +625,7 @@ contains
        deallocate(a)
     end if
 
-!!$    call int2string(map_id, band)
+!!$    call index2string(map_id, band)
 !!$    call write_map('res'//band//'.fits', residual)
 !!$    call mpi_finalize(ierr)
 !!$    stop
@@ -639,10 +653,10 @@ contains
           call multiply_with_beam(alms_work)
           call convert_harmonic_to_real_space(signal_map, alms_work)
           deallocate(alms_work)
-          signal_map = signal_map * spec2data(map_id, cmb=.true.)
        else
           call convert_harmonic_to_real_space(signal_map)
        end if
+       signal_map = signal_map * spec2data(map_id, cmb=.true.)
     else
        signal_map = 0.d0
     end if
@@ -658,7 +672,47 @@ contains
        deallocate(my_coeff)
     end if
 
+    call broadcast_global_signal(comm_chain)
+    if (num_global_components>0) signal_map(:,1)=signal_map(:,1)+global_signal(map_id)
+
   end subroutine compute_signal_map
+
+
+  subroutine sample_fossil_global_block(s, spectral_in)
+    ! Collective operation reached by the master and by MP operation 5. Pixel
+    ! partitions and bands contribute once; only the chain master draws state.
+    type(genvec), optional, intent(in) :: s
+    logical, optional, intent(in) :: spectral_in
+    logical :: spectral
+    integer :: i,k,ierr
+    real(dp), allocatable :: r(:,:),amps(:,:,:),statistics(:,:),total(:,:)
+    if (num_global_components==0) return
+    if (myid_chain==root) spectral=spectral_in
+    call mpi_bcast(spectral,1,MPI_LOGICAL,root,comm_chain,ierr)
+    call compute_signal_map(s)
+    allocate(r(0:map_size-1,nmaps),statistics(numband,2),total(numband,2))
+    r=cmbmap-signal_map
+    r(:,1)=r(:,1)+global_signal(map_id)
+    if (num_fg_signal>0) then
+       allocate(amps(0:npix-1,nmaps,num_fg_signal))
+       if (myid_chain==root) amps=s%fg_amp
+       call mpi_bcast(amps,size(amps),MPI_DOUBLE_PRECISION,root,comm_chain,ierr)
+       do k=1,num_fg_signal
+          do i=0,map_size-1
+             if (.not. enforce_zero_cl .and. trim(fg_components(k)%type)=='cmb' .and. mask(i,1)) cycle
+             r(i,1)=r(i,1)-fg_pix_spec_response(i,1,k)*amps(pixels(i),1,k)
+          end do
+       end do
+       deallocate(amps)
+    end if
+    statistics=0.d0
+    statistics(map_id,1)=sum(invN_rms(:,1,OUTSIDE_MASK))/noiseamp(map_id)**2
+    statistics(map_id,2)=sum(invN_rms(:,1,OUTSIDE_MASK)*r(:,1))/noiseamp(map_id)**2
+    call mpi_reduce(statistics,total,size(total),MPI_DOUBLE_PRECISION,MPI_SUM,root,comm_chain,ierr)
+    if (myid_chain==root) call update_fossil_globals(total(:,1),total(:,2),spectral)
+    call broadcast_global_signal(comm_chain)
+    deallocate(r,statistics,total)
+  end subroutine sample_fossil_global_block
 
 
   subroutine output_component_map(map_id, s_in, chain_in, iter_in, chain_dir)
@@ -671,7 +725,7 @@ contains
 
     integer(i4b) :: i, j, k, l, m, ierr, c, iter, chain
     character(len=512) :: filename, dir
-    character(len=2)   :: band, comp
+    character(len=:), allocatable :: band, comp
     character(len=5)   :: iter_text
     real(dp),     allocatable, dimension(:,:) :: alms_work
     real(dp),     allocatable, dimension(:,:) :: my_coeff
@@ -721,7 +775,7 @@ contains
        outmap(pixels,:) = signal
        call mpi_reduce(outmap, outmap2, size(outmap), MPI_DOUBLE_PRECISION, MPI_SUM, root, comm_alms, ierr)
        if (myid_alms == root) then
-          call int2string(map_id, band)
+          call index2string(map_id, band)
           call int2string(iter, iter_text)
           filename = trim(dir) // '/' // 'cmb_freq_band' // band // '_k' // iter_text // '.fits'
           outmap2 = outmap2 / bp(map_id)%gain / ant2data(map_id) * bp(map_id)%a2t
@@ -740,8 +794,8 @@ contains
           outmap(pixels,:) = s%fg_amp(pixels,:,c) * fg_pix_spec_response(:,:,c) !* ant2data(map_id)
           call mpi_reduce(outmap, outmap2, size(outmap), MPI_DOUBLE_PRECISION, MPI_SUM, root, comm_alms, ierr)
           if (myid_alms == root) then
-             call int2string(map_id, band)
-             call int2string(c, comp)
+             call index2string(map_id, band)
+             call index2string(c, comp)
              call int2string(iter, iter_text)
              filename = trim(dir) // '/' // trim(fg_components(c)%label) // '_band' // band // '_k' // &
                   & iter_text // '.fits'
@@ -766,7 +820,7 @@ contains
 
     integer(i4b) :: i, j, k, l, m, ierr, c, iter, chain
     character(len=512) :: filename, dir
-    character(len=2)   :: band, comp, chain_text
+    character(len=:), allocatable :: band, comp, chain_text
     character(len=5)   :: iter_text
     real(dp),     allocatable, dimension(:,:) :: alms_work
     real(dp),     allocatable, dimension(:,:) :: my_coeff
@@ -791,10 +845,10 @@ contains
        outmap(pixels,:) = fg_pix_spec_response(:,:,i)
        call mpi_reduce(outmap, outmap2, size(outmap), MPI_DOUBLE_PRECISION, MPI_SUM, root, comm_alms, ierr)
        if (myid_alms == root) then
-          call int2string(chain, chain_text)
-          call int2string(map_id, band)
+          call index2string(chain, chain_text)
+          call index2string(map_id, band)
           call int2string(iter, iter_text)
-          call int2string(i, comp)
+          call index2string(i, comp)
           filename = trim(dir) // '/' // 'mixmat_comp' // comp // '_band' // band // '_chain' // &
                & chain_text // '_k' // iter_text // '.fits'
           call write_map(filename, outmap2, comptype=fg_components(i)%label)
@@ -870,9 +924,9 @@ contains
     complex(dpc), allocatable, dimension(:,:,:,:) :: alms
     complex(dpc), allocatable, dimension(:,:,:)   :: alms_cmb
     character(len=512) :: filename
-    character(len=2) :: chain_text
+    character(len=:), allocatable :: chain_text
     character(len=5) :: iter_text
-    character(len=2) :: c1_text, c2_text
+    character(len=:), allocatable :: c1_text, c2_text
 
     allocate(alms(nmaps,0:lmax_corr,0:lmax_corr, 0:num_fg_comp), weights(1:2*nside, nmaps), &
          & mask(0:npix-1,1), maps(0:npix-1,1,0:num_fg_comp))
@@ -928,7 +982,7 @@ contains
     end do
 
     ! Output real-space correlation coefficients
-    call int2string(chain, chain_text)
+    call index2string(chain, chain_text)
     call int2string(iter, iter_text)
     filename = trim(chain_dir) // '/fg_pix_corr_c' // chain_text // '_k' // iter_text // '.dat'
     open(58,file=trim(filename), recl=1024)
@@ -944,9 +998,9 @@ contains
 
     ! Output cross spectra
     do i = 0, num_fg_comp
-       call int2string(i,c1_text)
+       call index2string(i,c1_text)
        do j = i+1, num_fg_comp
-          call int2string(j,c2_text)
+          call index2string(j,c2_text)
           filename = trim(chain_dir) // '/fg_cross_corr_' // c1_text // '_' // c2_text // '_c' // &
                & chain_text // '_k' // iter_text // '.dat'
           open(58,file=trim(filename))
@@ -970,9 +1024,9 @@ contains
     allocate(corr_map(0:12*nside_corr**2-1,1))
     q = (nside / nside_corr)**2
     do i = 0, num_fg_comp
-       call int2string(i,c1_text)
+       call index2string(i,c1_text)
        do j = i+1, num_fg_comp
-          call int2string(j,c2_text)
+          call index2string(j,c2_text)
           filename = trim(chain_dir) // '/fg_cross_map_' // c1_text // '_' // c2_text // '_c' // &
                & chain_text // '_k' // iter_text // '.fits'
 

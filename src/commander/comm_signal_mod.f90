@@ -15,8 +15,8 @@ module comm_signal_mod
   ! *********************************************************************
 
 
-  character(len=128),                            private :: sampling_method
-  character(len=128),                            private :: solution_method
+  character(len=512),                            private :: sampling_method
+  character(len=512),                            private :: solution_method
 
 
 contains
@@ -24,7 +24,7 @@ contains
   subroutine initialize_signal_mod(paramfile)
     implicit none
 
-    character(len=128),                   intent(in) :: paramfile
+    character(len=*),                   intent(in) :: paramfile
 
     call get_parameter(paramfile, 'SAMPLING_METHOD',    par_string=sampling_method)
     call get_parameter(paramfile, 'SOLUTION_METHOD',    par_string=solution_method)

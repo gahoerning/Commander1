@@ -21,12 +21,12 @@ contains
   subroutine initialize_genvec_mod(paramfile)
     implicit none
 
-    character(len=128), intent(in) :: paramfile
+    character(len=*), intent(in) :: paramfile
     
     integer(i4b) :: i, j, nside
     logical(lgt) :: polarization, sample_template, sample_T_modes, ok, enforce_zero_cl
-    character(len=2)   :: i_text, j_text
-    character(len=128) :: param_text, comp_type
+    character(len=:), allocatable :: i_text, j_text
+    character(len=512) :: param_text, comp_type
 
     call get_parameter(paramfile, 'LMAX',         par_int=lmax)    
     numcomp = lmax2numcomp(lmax)
@@ -59,7 +59,7 @@ contains
     ! Find the number of constraints on the free template amplitudes
     allocate(fix_temp(num_fg_temp,numband))
     do i = 1, numband
-       call int2string(i, i_text)
+       call index2string(i, i_text)
 
        if (sample_T_modes) then
           param_text = 'FIX_MONOPOLE' // i_text
@@ -70,7 +70,7 @@ contains
 
           if (sample_fg_temp) then
              do j = 5, num_fg_temp
-                call int2string(j-4, j_text)
+                call index2string(j-4, j_text)
                 param_text = 'FIX_TEMP' // i_text // '_' // j_text
                 call get_parameter(paramfile, trim(param_text), par_lgt=fix_temp(j,i))
              end do
@@ -78,7 +78,7 @@ contains
 
        else
           do j = 1, num_fg_temp
-             call int2string(j, j_text)
+             call index2string(j, j_text)
              param_text = 'FIX_TEMP' // i_text // '_' // j_text
              call get_parameter(paramfile, trim(param_text), par_lgt=fix_temp(j,i))
           end do
@@ -87,7 +87,7 @@ contains
 
     reduce_pix = .false.
     do i = 1, num_signal
-       call int2string(i, i_text)
+       call index2string(i, i_text)
        param_text= 'ENFORCE_POSITIVE_AMPLITUDE' // i_text
        call get_parameter(paramfile, param_text, par_lgt=ok)
        if (ok) cycle

@@ -15,7 +15,7 @@ module comm_cgd_matmul_mod
   integer(i4b),       private :: myid_alms, comm_alms, root, myid_chain, comm_chain
   logical(lgt),       private :: enforce_zero_cl
   type(planck_rng),   private :: rng_handle
-  character(len=128), private :: operation
+  character(len=512), private :: operation
   
 contains
 
@@ -42,7 +42,7 @@ contains
     implicit none
 
     integer(i4b),       intent(in) :: comm_alms_in, comm_chain_in
-    character(len=128), intent(in) :: paramfile
+    character(len=*), intent(in) :: paramfile
     integer(i4b),       intent(in) :: seed, npix_in, nmaps_in, lmax_in
 
     integer(i4b) :: ierr
@@ -141,6 +141,7 @@ contains
     ! The pixel foreground part
     do i = 1, num_fg_signal
        if (fg_components(i)%enforce_positive_amplitude) cycle
+       if ((num_global_components>0 .or. fossil_exact_local_seds) .and. .not. fg_components(i)%sample_amplitudes) cycle
        if (.not. enforce_zero_cl .and. trim(fg_components(i)%type) == 'cmb') cycle
        v1%fg_amp(pixels,:,i) = fg_pix_spec_response(:,:,i) * map_sum
     end do
@@ -253,6 +254,7 @@ contains
     ! Add pixel foreground term
     do l = 1, num_fg_signal
        if (fg_components(l)%enforce_positive_amplitude) cycle
+       if ((num_global_components>0 .or. fossil_exact_local_seds) .and. .not. fg_components(l)%sample_amplitudes) cycle
        if (.not. enforce_zero_cl .and. trim(fg_components(l)%type) == 'cmb') cycle
        map_sum = map_sum + fg_pix_spec_response(:,:,l) * v1%fg_amp(pixels,:,l)
     end do
@@ -298,6 +300,7 @@ contains
     ! The pixel foreground part
     do i = 1, num_fg_signal
        if (fg_components(i)%enforce_positive_amplitude) cycle
+       if ((num_global_components>0 .or. fossil_exact_local_seds) .and. .not. fg_components(i)%sample_amplitudes) cycle
        if (.not. enforce_zero_cl .and. trim(fg_components(i)%type) == 'cmb') cycle
        v2%fg_amp(pixels,:,i) = v2%fg_amp(pixels,:,i) + fg_pix_spec_response(:,:,i) * map_sum
     end do

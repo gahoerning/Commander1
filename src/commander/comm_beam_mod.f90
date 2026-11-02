@@ -7,7 +7,7 @@ module comm_beam_mod
   integer(i4b),                              private :: lmax_lowres
   integer(i4b),                              private :: comm_alms, myid_alms, root, numprocs, ierr
   integer(i4b),                              private :: comm_chain, myid_chain
-  character(len=128),                        private :: convolution_method
+  character(len=512),                        private :: convolution_method
 
   real(dp),     allocatable, dimension(:,:)  :: beam, beam_lowres
 
@@ -18,12 +18,12 @@ contains
     implicit none
 
     integer(i4b),       intent(in) :: comm_alms_in, comm_chain_in, map_id
-    character(len=128), intent(in) :: paramfile
+    character(len=*), intent(in) :: paramfile
 
     integer(i4b)       :: unit
     logical(lgt)       :: polarization
-    character(len=2)   :: map_text
-    character(len=128) :: beamfile, paramtext, pixwinfile
+    character(len=:), allocatable :: map_text
+    character(len=512) :: beamfile, paramtext, pixwinfile
 
     real(dp) :: fwhm_lowres
     real(dp), pointer, dimension(:,:)   :: pixwin
@@ -36,7 +36,7 @@ contains
     call mpi_comm_size(comm_alms, numprocs, ierr)
     root = 0
 
-    call int2string(map_id, map_text)
+    call index2string(map_id, map_text)
 
     call get_parameter(paramfile, 'NSIDE',                   par_int=nside)       
     call get_parameter(paramfile, 'LMAX',                    par_int=lmax)       

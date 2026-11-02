@@ -17,7 +17,7 @@ contains
   subroutine initialize_Cl_sampling_mod(paramfile)
     implicit none
 
-    character(len=128),                   intent(in) :: paramfile
+    character(len=*),                   intent(in) :: paramfile
 
   end subroutine initialize_Cl_sampling_mod
 

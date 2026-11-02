@@ -29,13 +29,13 @@ contains
   subroutine initialize_chisq_mod(paramfile, comm_chain_in, comm_alms_in, comm_data_in)
     implicit none
 
-    character(len=128),                intent(in) :: paramfile
+    character(len=*),                intent(in) :: paramfile
     integer(i4b),                      intent(in) :: comm_chain_in, comm_alms_in, comm_data_in
 
     integer(i4b) :: i
     logical(lgt)       :: exist, apply_gain_corr
-    character(len=2)   :: i_text
-    character(len=256) :: paramtext, procmaskfile
+    character(len=:), allocatable :: i_text
+    character(len=512) :: paramtext, procmaskfile
     real(dp), allocatable, dimension(:,:) :: mask_in
 
     root        = 0
@@ -70,7 +70,7 @@ contains
     if (apply_gain_corr) then
        call get_parameter(paramfile, 'OUTPUT_GAIN_RESIDUALS', par_lgt=output_residuals)
        do i = 1, numband
-          call int2string(i, i_text)
+          call index2string(i, i_text)
           paramtext = 'GAIN_PRIOR_MEAN' // i_text
           call get_parameter(paramfile, trim(paramtext), par_dp=g_gauss(i,1))
           paramtext = 'GAIN_PRIOR_RMS' // i_text
@@ -107,7 +107,7 @@ contains
     logical(lgt) :: output_chisq_highlat, output_stats_, output_chisq, output_chisq_band_fullsky
     real(dp)     :: my_chisq, chisq_tot, f, r, monopole
     character(len=512) :: dir, filename
-    character(len=2)   :: band, chain_text
+    character(len=:), allocatable :: band, chain_text
     character(len=5)   :: iter_text
     real(dp),     allocatable, dimension(:)     :: my_chisq_band, buffer
     real(dp),     allocatable, dimension(:,:,:) :: fg_amp, ind_map
@@ -203,6 +203,9 @@ contains
        deallocate(fg_amp)
     end if
 
+    call broadcast_global_signal(comm_chain)
+    if (num_global_components>0) my_signal(:,1)=my_signal(:,1)+global_signal(map_id)
+
     ! Compute the chi-square
     my_chisq_map = 0.d0
     do i = 0, map_size-1
@@ -210,7 +213,7 @@ contains
     end do
     residual = residual
 
-!!$    call int2string(map_id, band)
+!!$    call index2string(map_id, band)
 !!$    call write_map('chires'//band//'.fits', residual)
 !!$    call mpi_finalize(ierr)
 !!$    stop
@@ -270,9 +273,9 @@ contains
        call mpi_bcast(i,   1,        MPI_INTEGER,   root, comm_chain, ierr)    
        call mpi_bcast(c,   1,        MPI_INTEGER,   root, comm_chain, ierr)    
        
-       call int2string(map_id, band)
+       call index2string(map_id, band)
        call int2string(i,      iter_text)
-       call int2string(c,      chain_text)
+       call index2string(c,      chain_text)
        filename = trim(chain_dir) // '/chisq_' // trim(bp(map_id)%label) // '_c' // chain_text // '_k' // iter_text // '.fits'
        call mpi_reduce(my_chisq_map, chisq_map_tot, size(my_chisq_map), MPI_DOUBLE_PRECISION, &
             & MPI_SUM, root, comm_alms, ierr)
@@ -379,7 +382,7 @@ contains
     integer(i4b) :: numpair, numval
     real(dp)     :: my_chisq, chisq_tot, f, r, mu, sigma, my_mu, my_sigma, gain_new, old_gain
     character(len=512) :: filename
-    character(len=2)   :: band, chain_text
+    character(len=:), allocatable :: band, chain_text
     character(len=5)   :: iter_text
     character(len=5)   :: id_text
     real(dp)           :: MAX_DELTA_G = 0.05d0, md(4)
@@ -531,14 +534,14 @@ contains
        end if
 
 
-!!$       call int2string(map_id, band)
+!!$       call index2string(map_id, band)
 !!$       open(58,file='cl'//band//'.dat', recl=1024)
 !!$       do l = lmin, lmax
 !!$          write(58,*) l, cl1(l), cl2(l)
 !!$       end do
 !!$       close(58)
 !!$
-!!$       call int2string(map_id, band)
+!!$       call index2string(map_id, band)
 !!$       open(58,file='alms'//band//'.dat', recl=1024)
 !!$       i = lmin**2+1
 !!$       do l = lmin, lmax
@@ -666,8 +669,8 @@ contains
        end if
        call mpi_bcast(myiter,  1, MPI_INTEGER, root, comm_chain, ierr)
        call mpi_bcast(mychain, 1, MPI_INTEGER, root, comm_chain, ierr)
-       call int2string(map_id, band)
-       call int2string(mychain, chain_text)
+       call index2string(map_id, band)
+       call index2string(mychain, chain_text)
        call int2string(myiter,    iter_text)
        call write_map(trim(chain_dir)//'/gainres_c'//chain_text//'_b'//band//'_k'//&
             & iter_text // '.fits', residual, comptype='Residual', unit=bp(map_id)%unit, nu_ref=bp(map_id)%nu_c)

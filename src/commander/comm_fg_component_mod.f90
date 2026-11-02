@@ -80,6 +80,7 @@ module comm_fg_component_mod
   integer(i4b),            private :: comm_chain, myid_chain, numprocs_chain, root, myid, numprocs
 
   real(dp) :: alpha_flat, gamma_flat
+  logical :: fossil_exact_local_seds=.false.
 
   type(fg_meta_data), allocatable, dimension(:)            :: fg_components
 
@@ -93,14 +94,14 @@ contains
     implicit none
 
     integer(i4b),                         intent(in) :: comm_chain_in
-    character(len=128),                   intent(in) :: paramfile
+    character(len=*),                   intent(in) :: paramfile
 
     real(dp)           :: beta, f_eff, nu, dnu, S_ref, delta, norm
     integer(i4b)       :: i, j, k, l, m, n, ierr, num_samp_point, ind(1), unit
-    character(len=2)   :: i_text, j_text
-    logical(lgt)       :: exist, apply_par_rms_smooth, optimize_priors
-    character(len=128) :: paramname, filename_spectrum, filename, chaindir, maskname
-    character(len=128) :: filename_emission, filename_u
+    character(len=:), allocatable :: i_text, j_text
+    logical(lgt)       :: exist, apply_par_rms_smooth, optimize_priors, fossil_key_present
+    character(len=512) :: paramname, filename_spectrum, filename, chaindir, maskname
+    character(len=512) :: filename_emission, filename_u
     character(len=5000) :: line
     real(dp), allocatable, dimension(:)       :: freq
     real(dp), pointer,     dimension(:)       :: u_array
@@ -125,6 +126,15 @@ contains
     call get_parameter(paramfile,    'APPLY_PAR_RMS_SMOOTHING',   par_lgt=apply_par_rms_smooth)
     call get_parameter(paramfile,    'OPTIMIZE_PRIORS',           par_lgt=optimize_priors)
     call get_parameter(paramfile,    'SAMPLE_TT_MODES',           par_lgt=sample_T_modes)
+    call get_parameter(paramfile,'FOSSIL_EXACT_LOCAL_SEDS', &
+         par_lgt=fossil_exact_local_seds,par_present=fossil_key_present)
+    if (.not. fossil_key_present) fossil_exact_local_seds=.false.
+    if (fossil_exact_local_seds) then
+       if (any(bp%id/='delta')) then
+          write(*,*) 'FOSSIL_EXACT_LOCAL_SEDS requires monochromatic delta bands.'
+          call mpi_abort(MPI_COMM_WORLD,1,ierr)
+       end if
+    end if
 !    call get_parameter(paramfile,    'ALPHA_FLAT',                par_dp=alpha_flat)
 !    call get_parameter(paramfile,    'GAMMA_FLAT',                par_dp=gamma_flat)
     npix       = 12*nside**2
@@ -150,7 +160,7 @@ contains
     num_fg_par = 0
     do i = 1, num_fg_comp
        
-       call int2string(i, i_text)
+       call index2string(i, i_text)
 
        fg_components(i)%fg_id = i
 
@@ -893,7 +903,7 @@ contains
           allocate(fg_components(i)%priors(fg_components(i)%npar,3))
           allocate(fg_components(i)%gauss_prior(fg_components(i)%npar,2))
           do j = 1, fg_components(i)%npar
-             call int2string(j, j_text)
+             call index2string(j, j_text)
              paramname = 'LINE_LABEL' // i_text // '_' // j_text
              call get_parameter(paramfile, paramname, par_string=fg_components(i)%indlabel(j))       
              paramname = 'BAND' // i_text // '_' // j_text
@@ -1190,14 +1200,14 @@ contains
 
        allocate(fg_components(i)%fwhm_p(fg_components(i)%npar))
        do j = 1, fg_components(i)%npar
-          call int2string(j, j_text)
+          call index2string(j, j_text)
           call get_parameter(paramfile, 'FWHM_PAR'//i_text//'_'//j_text, par_dp=fg_components(i)%fwhm_p(j))
        end do
 
        allocate(fg_components(i)%optimize_prior(fg_components(i)%npar))
        if (optimize_priors) then
           do j = 1, fg_components(i)%npar
-             call int2string(j, j_text)
+             call index2string(j, j_text)
              call get_parameter(paramfile, 'OPTIMIZE_PRIOR_MEAN'//i_text//'_'//j_text, &
                   & par_lgt=fg_components(i)%optimize_prior(j))
           end do
@@ -1214,7 +1224,7 @@ contains
              fg_components(i)%p_rms_gauss = 0.d0
              fg_components(i)%p_rms_uni   = 0.d0
           else
-             call int2string(j, j_text)
+             call index2string(j, j_text)
              call get_parameter(paramfile, 'PAR_RMS_DEFAULT'//i_text//'_'//j_text, par_dp=fg_components(i)%p_rms(j))
              call get_parameter(paramfile, 'PAR_RMS_GAUSS_MEAN'//i_text//'_'//j_text, par_dp=fg_components(i)%p_rms_gauss(j,1))
              call get_parameter(paramfile, 'PAR_RMS_GAUSS_RMS'//i_text//'_'//j_text, par_dp=fg_components(i)%p_rms_gauss(j,2))
@@ -1244,7 +1254,7 @@ contains
        ! Set up index regions
        allocate(fg_components(i)%indregs(fg_components(i)%npar))
        do j = 1, fg_components(i)%npar
-          call int2string(j, j_text)
+          call index2string(j, j_text)
           paramname = 'REGION_DEFINITION' // i_text // '_' // j_text
           call get_parameter(paramfile, paramname, par_string=filename, path=base_path)
           call initialize_index_regions(chaindir, i, j, filename, mask, fg_components(i)%mask, nside, nmaps, &
@@ -1289,6 +1299,16 @@ contains
        color_corrected_component = .true.
     end select
   end function color_corrected_component
+
+  logical function direct_fossil_component(comp)
+    type(fg_meta_data), intent(in) :: comp
+    direct_fossil_component=.false.
+    if (.not. fossil_exact_local_seds) return
+    select case(trim(comp%type))
+    case('one-component_dust','power_law','AME_freq_shift','AME_freq_shift_2par')
+       direct_fossil_component=.true.
+    end select
+  end function direct_fossil_component
 
   function monochromatic_fg_spectrum(comp, pars, nu, stokes) result(value)
     type(fg_meta_data), intent(in) :: comp
@@ -1441,6 +1461,12 @@ contains
        end do
     end if
 
+    if (direct_fossil_component(fg_comp)) then
+       get_effective_fg_spectrum=get_ideal_fg_spectrum(fg_comp,fg_params,bp(band)%nu_c) &
+            * ant2data(band)*bp(band)%gain
+       return
+    end if
+
     if (bp(band)%use_color_corr .and. color_corrected_component(fg_comp)) then
        ! Replace bandpass integration by the monochromatic foreground times K(alpha).
        ! K is frozen between scheduled updates and shared by all continuum components.
@@ -1536,7 +1562,8 @@ contains
        end if
     end if
 
-    if (bp(band)%use_color_corr .and. color_corrected_component(fg_comp)) then
+    if (direct_fossil_component(fg_comp) .or. &
+         (bp(band)%use_color_corr .and. color_corrected_component(fg_comp))) then
        get_effective_deriv_fg_spectrum = 0.d0
        if (fg_comp%npar == 0) return
        delta = 1.d-5 * max(1.d0, abs(fg_params(par_id)))
@@ -1615,7 +1642,7 @@ contains
     real(dp),         intent(in), optional :: gain
     real(dp)                               :: spec2data
 
-    character(len=128) :: intype_, outtype_
+    character(len=512) :: intype_, outtype_
 
     outtype_ = bp(band)%unit; if (present(outtype)) outtype_ = outtype
     if (present(cmb)) then
@@ -1674,14 +1701,14 @@ contains
   subroutine initialize_index_map(paramfile, rng_handle, fg_param_map)
     implicit none
     
-    character(len=128),                      intent(in)    :: paramfile
+    character(len=*),                      intent(in)    :: paramfile
     type(planck_rng),                        intent(inout) :: rng_handle
     real(dp),           dimension(0:,1:,1:), intent(out)   :: fg_param_map
     
     real(dp)           :: index
     integer(i4b)       :: i, j, k, l, m, n, pol_ind, counter, npix, nmaps, p, s, ierr
-    character(len=2)   :: i_text, j_text
-    character(len=128) :: paramtext, filename
+    character(len=:), allocatable :: i_text, j_text
+    character(len=512) :: paramtext, filename
     real(dp), allocatable, dimension(:,:) :: map
 
     npix  = size(fg_param_map,1)
@@ -1696,8 +1723,8 @@ contains
 
           if (trim(fg_components(k)%init_mode) == 'input_map') then
              allocate(map(0:npix-1,nmaps))
-             call int2string(k,i_text)
-             call int2string(m,j_text)
+             call index2string(k,i_text)
+             call index2string(m,j_text)
              call get_parameter(paramfile, 'INIT_INDEX_MAP' // i_text // '_' // j_text, par_string=filename, path=base_path)
              call read_map(filename, map)
              if (trim(fg_components(k)%type) == 'freefree_EM' .and. m ==1) then
@@ -2691,14 +2718,14 @@ contains
   subroutine read_spectrum(filename, spectrum, nu_ref, sample_S_tab)
     implicit none
 
-    character(len=128),                         intent(in)  :: filename
+    character(len=*),                         intent(in)  :: filename
     real(dp),           pointer, dimension(:,:)             :: spectrum
     real(dp),                                   intent(in), optional  :: nu_ref
     logical(lgt),       pointer, dimension(:),  optional    :: sample_S_tab
 
     real(dp)            :: S_ref
     integer(i4b)        :: i, j, numpoint, unit, first, last
-    character(len=128)  :: nu, val, string
+    character(len=512)  :: nu, val, string
     real(dp), allocatable, dimension(:) :: x, y, y2
     real(dp), allocatable, dimension(:,:) :: S_temp
 
@@ -2783,7 +2810,7 @@ contains
   subroutine read_phys_dust_spectrum(emission_file, u_file, spectrum, u_array, nu_ref)
     implicit none
 
-    character(len=128),                         intent(in)  :: emission_file, u_file
+    character(len=*),                         intent(in)  :: emission_file, u_file
     real(dp),           pointer, dimension(:,:)             :: spectrum
     real(dp),           pointer, dimension(:)               :: u_array
     real(dp),                                   intent(in)  :: nu_ref
@@ -2861,8 +2888,8 @@ contains
     integer(i4b) :: i, j, k, l, p, q, npix, m, n, nside_lowres, npix_lowres, p_nest, counter, unit, ierr, level
     integer(i4b) :: nlevel, pix, ntype, t
     real(dp)     :: threshold
-    character(len=256) :: name, type_text, n_text, precompfile, fname
-    character(len=2)   :: comp_text, par_text
+    character(len=512) :: name, type_text, n_text, precompfile, fname
+    character(len=:), allocatable :: comp_text, par_text
     logical(lgt)       :: exist, new_region, ok
     integer(i4b), allocatable, dimension(:)   :: regset, ind
     real(dp),     allocatable, dimension(:)   :: fwhms
@@ -2871,8 +2898,8 @@ contains
     real(dp),     allocatable, dimension(:,:) :: map, args, w_tot
     real(dp),     allocatable, dimension(:,:) :: order
 
-    call int2string(comp, comp_text)
-    call int2string(par,  par_text)
+    call index2string(comp, comp_text)
+    call index2string(par,  par_text)
     precompfile = trim(chaindir) // '/regdef_c' // comp_text // '_p' // par_text // '.unf'
     inquire(file=precompfile, exist=exist) 
     unit = getlun()

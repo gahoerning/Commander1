@@ -25,6 +25,18 @@ contains
        getlun=getlun+1
     end do
   end function
+  subroutine index2string(i,s)
+    integer(i4b), intent(in) :: i
+    character(len=:), allocatable, intent(out) :: s
+    character(len=32) :: buffer
+    write(buffer,'(i0)') i
+    if (i<10) then
+       s='0'//trim(buffer)
+    else
+       s=trim(buffer)
+    end if
+  end subroutine index2string
+
   subroutine int2string(i, text)
     integer, intent(in) :: i
     character(len=*), intent(out) :: text

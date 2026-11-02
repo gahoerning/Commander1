@@ -64,8 +64,8 @@ module comm_cl_spline_mod
 
     subroutine initialize_cl_spline_mod(unit, paramfile)
         implicit none
-        character(len=128)                              :: paramfile, nodefile
-        character(len=128), allocatable, dimension(:)   :: bb_templfile
+        character(len=512)                              :: paramfile, nodefile
+        character(len=512), allocatable, dimension(:)   :: bb_templfile
         integer(i4b)                                    :: unit, i, j, l, nside
         character(len=1)                                :: num_bbtempl_string
         real(dp)                                        :: dummy
@@ -241,7 +241,7 @@ module comm_cl_spline_mod
         real(dp)                                        :: lp1, lpn
         logical(lgt), dimension(num_splinemodes)        :: ok
         logical(lgt)                                    :: okprior
-        character(len=128)                              :: filename
+        character(len=512)                              :: filename
 
         lp1 = 1.d30
         lpn = 1.d30
@@ -446,7 +446,7 @@ module comm_cl_spline_mod
         integer(i4b), parameter                         :: numsamp = 100
         real(dp), dimension(numsamp)                    :: chain
         real(dp)                                        :: sd
-        character(len=128)                              :: filename
+        character(len=512)                              :: filename
         type(planck_rng)                                :: rng_handle
 
         integer(i4b)                                    :: i, j, k, reps
@@ -654,7 +654,7 @@ module comm_cl_spline_mod
         real(dp),       dimension(l_min_min:, :)        :: cls
         integer(i4b), optional                          :: modes
         integer(i4b)                                    :: unit, l, howmany
-        character(len=128)                              :: filename
+        character(len=512)                              :: filename
 
         unit = 87
 
@@ -688,8 +688,8 @@ module comm_cl_spline_mod
         type(spline_amps),       dimension(num_splinemodes)     :: amps
         real(dp),       dimension(num_bbtempl), optional        :: bbamps
         integer(i4b)                                            :: unit, i, l, j
-        character(len=128), optional                    :: filename
-        character(len=128)                              :: filename1, filename2
+        character(len=512), optional                    :: filename
+        character(len=512)                              :: filename1, filename2
 
         if (present(filename)) then
             filename1 = filename
@@ -1225,7 +1225,7 @@ module comm_cl_spline_mod
         real(dp)                                                :: norm
         integer(i4b)                                            :: i, l, j
         logical(lgt), dimension(num_modeel)                     :: ok
-        character(len=128)                                      :: filename
+        character(len=512)                                      :: filename
 
         ok = .true.
 
@@ -1293,7 +1293,7 @@ module comm_cl_spline_mod
         integer(i4b)                                    :: i, j, k, m, l
         logical(lgt), dimension(num_modeel)              :: ok
 
-        character(len=128)                              :: filename
+        character(len=512)                              :: filename
         type(planck_rng)                                :: rng_handle
 
         if (.not. allocated(l_max)) then

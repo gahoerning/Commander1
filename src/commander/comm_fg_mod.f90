@@ -20,7 +20,7 @@ module comm_fg_mod
   integer(i4b),       private  :: chain, root, ierr, verbosity, nind
   real(dp),           private  :: rms_specind
   type(planck_rng),   private  :: handle
-  character(len=128), private  :: mode, operation
+  character(len=512), private  :: mode, operation
   logical(lgt),       private  :: first_call = .true., enforce_zero_cl
 
   integer(i4b), dimension(MPI_STATUS_SIZE),          private :: status
@@ -55,13 +55,13 @@ contains
   subroutine initialize_fg_mod(chain_in, comm_chain_in, comm_alms_in, handle_in, paramfile)
     implicit none
 
-    character(len=128),                intent(in)    :: paramfile
+    character(len=*),                intent(in)    :: paramfile
     integer(i4b),                      intent(in)    :: comm_chain_in, comm_alms_in, chain_in
     type(planck_rng),                  intent(inout) :: handle_in
 
     integer(i4b) :: i, j, k, l, ll, m, ierr, pol_ind, seed, fac, numval
     character(len=2)   :: map_text
-    character(len=128) :: filename, paramtext
+    character(len=512) :: filename, paramtext
 
     chain      = chain_in
     comm_chain = comm_chain_in
@@ -525,6 +525,8 @@ contains
              end if
                 
              if (status /= 0) then
+                if ((num_global_components>0 .or. fossil_exact_local_seds) .and. trim(operation)=='sample') &
+                     call fossil_global_error('Local inverse sampler failed; refusing an ML replacement in sample mode.')
                 ! Return ML point if sampling failed; this needs to be fixed!
                 par    = par_1D(1)
                 status = 0
@@ -1355,7 +1357,7 @@ contains
     logical(lgt) :: ok, output, firstcall, burnin_
     character(len=2) :: i_text
     character(len=4) :: chain_text
-    character(len=256) :: cdir
+    character(len=512) :: cdir
     real(dp), allocatable, dimension(:)       :: p0, eta, r, sorted, mask2map, W
     real(dp), allocatable, dimension(:,:)     :: M, p_tot, sigma, inv_sigma, map, prop_local
     real(dp), allocatable, dimension(:,:)     :: inv_N_local, sigma_red, mu, mu_red, p, samples

@@ -16,13 +16,13 @@ contains
     character(len=*), intent(in) :: paramfile
 
     integer(i4b)       :: i, j
-    character(len=2)   :: i_text
-    character(len=256) :: paramtext
+    character(len=:), allocatable :: i_text
+    character(len=512) :: paramtext
 
     ! Read noise amplitude priors
     allocate(N_prior(numband,2))
     do i = 1, numband
-       call int2string(i, i_text)
+       call index2string(i, i_text)
        paramtext = 'NOISEAMP_PRIOR_MEAN' // i_text
        call get_parameter(paramfile, trim(paramtext), par_dp=N_prior(i,1))
        paramtext = 'NOISEAMP_PRIOR_RMS' // i_text

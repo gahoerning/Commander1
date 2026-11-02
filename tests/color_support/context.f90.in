@@ -15,7 +15,7 @@ module color_test_context
   type(bandinfo), allocatable :: bp(:)
   integer :: num_fg_comp=4, num_fg_par=8, npix=2, nmaps=3, numband=2
   integer :: myid_chain=0, root=0, numprocs_chain=1, comm_chain=0, handle=0
-  logical :: sample_T_modes=.true.
+  logical :: sample_T_modes=.true., fossil_exact_local_seds=.false.
   real(sp), parameter :: missval=-1.6375e30
   character(len=16) :: operation='optimize'
   character(len=40) :: config_mode='auto'
@@ -92,6 +92,18 @@ contains
     integer, intent(inout) :: h
     rand_gauss=0.d0
   end function
+  subroutine index2string(i,s)
+    integer(i4b), intent(in) :: i
+    character(len=:), allocatable, intent(out) :: s
+    character(len=32) :: buffer
+    write(buffer,'(i0)') i
+    if (i<10) then
+       s='0'//trim(buffer)
+    else
+       s=trim(buffer)
+    end if
+  end subroutine index2string
+
   subroutine int2string(i,s)
     integer, intent(in) :: i
     character(len=*), intent(out) :: s

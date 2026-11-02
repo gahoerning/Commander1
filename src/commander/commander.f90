@@ -48,7 +48,7 @@ program commander
   integer(i4b)        :: comm_chain, comm_alms, comm_data, myid_chain, myid_alms, myid_data
   logical(lgt)        :: slave_work, master, polar
   type(planck_rng)    :: rng_handle
-  character(len=128)  :: paramfile, filename, solution_method, chain_dir, operation
+  character(len=512)  :: paramfile, filename, solution_method, chain_dir, operation
 
   real(dp),     allocatable, dimension(:,:)         :: cl_i
   real(dp),     allocatable, dimension(:,:)         :: weights
@@ -190,6 +190,7 @@ program commander
   ! Initialize foregrounds module
   if (myid_chain == root .and. verbosity > 2) write(*,*) 'Initializing foreground modules'
   call initialize_bp_mod(myid, chain, comm_chain, paramfile, rng_handle)
+  call initialize_fossil_globals(paramfile,base_seed)
 
 !!$  if (myid == root) then
 !!$     write(*,*) '1-0'
@@ -438,7 +439,7 @@ contains
     integer(i4b),                         intent(in)    :: chain
     type(planck_rng),                     intent(inout) :: rng_handle
     real(dp),           dimension(0:,1:), intent(inout) :: cl_i 
-    character(len=128),                   intent(in)    :: paramfile
+    character(len=*),                   intent(in)    :: paramfile
 
     integer(i4b)       :: ierr, numprocs, myid, root, precond_type
     integer(i4b)       :: iter, i, j, k, l, m, num_gibbs_iter, num_step_ml_search
@@ -446,13 +447,13 @@ contains
     logical(lgt)       :: condition_on_cl, enforce_zero_cl, sample_inside_mask, exist, sample_bp
     logical(lgt)       :: output_ml_map_and_covmat
     real(dp)           :: t1, t2, chisq_fullsky, chisq_highlat
-    character(len=256) :: filename, chain_dir, operation, cmb_md_maskfile
+    character(len=512) :: filename, chain_dir, operation, cmb_md_maskfile
     type(genvec)       :: s_i, s_i_fg, s_prev
 
     real(dp),     allocatable, dimension(:,:)   :: cl_prev, cmb_md_mask
     real(dp),     allocatable, dimension(:,:,:) :: fg_amp_lowres, fg_param_map, fg_param_map_prev
     integer(i4b),              dimension(3)     :: l_sub, num_sub_samples
-    character(len=256), allocatable, dimension(:,:) :: det_defs
+    character(len=512), allocatable, dimension(:,:) :: det_defs
 
     real(dp), allocatable, dimension(:,:,:) :: debug
 
@@ -533,6 +534,7 @@ contains
 
     ! Initialize chains
     first_iteration = 1
+    if (num_global_components>0) first_iteration=fossil_restart_iteration+1
     call initialize_chain_files(chain_dir, chain, num_gibbs_iter)
 
     !call output_component_maps(map_id, s_i, chain, 10, chain_dir)
@@ -572,6 +574,7 @@ contains
           !call update_cgd_constraint_module
        end if
        call genvec_set_equal(s_i, s_prev)
+       call save_fossil_globals()
        
        stat = 0
        
@@ -591,7 +594,8 @@ contains
        end if
 
        ! Outside mask
-       if (.not. enforce_zero_cl) then
+       if (.not. enforce_zero_cl .or. ((num_global_components>0 .or. fossil_exact_local_seds) .and. &
+            any(fg_components%sample_amplitudes .and. .not. fg_components%enforce_positive_amplitude))) then
        !if (.true.) then
           precond_type       = 2
           call update_mask_state(OUTSIDE_MASK)
@@ -641,6 +645,8 @@ contains
 !!$       call output_sample(paramfile, 2, 3, s_i, skip_freq, cl_i, fg_param_map, noiseamp, bp%gain, bp%delta)
        if (allocated(cmb_md_mask) .and. sample_T_modes) call enforce_zero_cmb_md(s_i, cmb_md_mask(:,1))
 
+       if (stat==0) call sample_fossil_globals(s_i,.false.)
+
 
 !!$       write(*,*) 'd'
 !!$       call output_sample(paramfile, 2, 4, s_i, skip_freq, cl_i, fg_param_map, noiseamp, bp%gain, bp%delta)
@@ -671,6 +677,7 @@ contains
                & fg_amp_lowres, fg_param_map, stat)
           if (stat == 0) call update_fg_pix_response_maps(fg_param_map)
        end if
+       if (stat==0) call sample_fossil_globals(s_i,.true.)
 !!$       write(*,*) 'e'
 !!$       call output_sample(paramfile, 2, 5, s_i, skip_freq, cl_i, fg_param_map, noiseamp, bp%gain, bp%delta)
     
@@ -783,6 +790,8 @@ contains
 
        if (stat == 0) then
 
+          call output_fossil_globals(chain_dir,chain,iter)
+
           ! Store sample to disk
           if (mod(iter,thinning_factor) == 0) then
              call output_sample(paramfile, chain, iter, s_i, skip_freq, cl_i, fg_param_map, noiseamp, bp%gain, bp%delta)
@@ -796,8 +805,11 @@ contains
 
        else
 
+          if (num_global_components>0 .or. fossil_exact_local_seds) &
+               call fossil_global_error('A local Gibbs update failed; fix the reported solver/sampler error before continuing.')
           if (verbosity > 0) write(*,*) 'Chain no. ', chain, ' -- sample rejected = ', iter
           call genvec_set_equal(s_prev, s_i)
+          call restore_fossil_globals()
           cl_i         = cl_prev
           if (allocated(fg_param_map)) fg_param_map = fg_param_map_prev
           call update_S_mult_mod(cl_i)
@@ -834,7 +846,7 @@ contains
 
     integer(i4b)       :: i, unit
     character(len=4)   :: chain_text
-    character(len=256) :: filename
+    character(len=512) :: filename
 
     call int2string(chain, chain_text)
     unit = getlun()
@@ -955,7 +967,7 @@ contains
 
     real(dp)           :: lat, lon, chisq_fullsky, chisq_highlat, scale
     integer(i4b)       :: i, j, l, unit
-    character(len=256) :: filename
+    character(len=512) :: filename
     character(len=4)   :: i_text, chain_text
     character(len=5)   :: iter_text
     integer(i4b), allocatable, dimension(:), save     :: pix
@@ -966,8 +978,8 @@ contains
     integer(i4b),       save :: output_thinning_factor = 0, num_objects
     logical(lgt),       save :: output_cross_corr
     logical(lgt),       save :: output_data(5)
-    character(len=256), save :: chain_dir, object_dir
-    character(len=256), allocatable, dimension(:), save :: objname
+    character(len=512), save :: chain_dir, object_dir
+    character(len=512), allocatable, dimension(:), save :: objname
 
     if (output_thinning_factor == 0) then
        call get_parameter(paramfile, 'OUTPUT_THINNING_FACTOR',          par_int=output_thinning_factor)
@@ -1815,7 +1827,7 @@ contains
     integer(i4b) :: i, j, k, q, unit
     real(dp),     allocatable, dimension(:) :: spec_tot
     character(len=1), dimension(3) :: ind2label = ['T','Q','U']
-    character(len=256) :: filename
+    character(len=512) :: filename
     character(len=5)   :: iter_text
     character(len=3)   :: chain_text
     type(fg_params)    :: fg_par
@@ -1920,13 +1932,13 @@ contains
     implicit none
 
     integer(i4b),                   intent(in) :: chain, iteration
-    character(len=128),             intent(in) :: chain_dir
+    character(len=*),             intent(in) :: chain_dir
     real(dp),     dimension(1:,1:), intent(in) :: coeff
 
     integer(i4b)       :: k, j, l, numband, unit
     character(len=4)   :: chain_text
     character(len=5)   :: i_text
-    character(len=128) :: filename
+    character(len=512) :: filename
 
     unit    = getlun()
     numband = size(coeff(1,:))
@@ -1953,7 +1965,7 @@ contains
     logical(lgt)       :: exist
     real(dp)           :: scale
     character(len=512) :: filename
-    character(len=2)   :: i_text
+    character(len=:), allocatable :: i_text
 
     if (num_fg_comp == 0) return
 
@@ -1973,7 +1985,7 @@ contains
          cycle
       end if
 
-       call int2string(i, i_text)
+       call index2string(i, i_text)
        call get_parameter(paramfile, 'INITIAL_AMPLITUDE_MAP'//i_text, par_string=filename, path=base_path)
        inquire(file=trim(filename), exist=exist)
        if (exist) then
@@ -2019,7 +2031,7 @@ contains
     implicit none
 
     integer(i4b),                   intent(in) :: chain, iter
-    character(len=128),             intent(in) :: parfile, chain_dir
+    character(len=*),             intent(in) :: parfile, chain_dir
     type(genvec),                   intent(in) :: s_i
     real(dp), dimension(0:,1:,1:),  intent(in) :: par_smooth
 
@@ -2027,7 +2039,7 @@ contains
     integer(i4b)       :: c, i, k, j, l, p, numband, unit, n, nspline, k_min, k_max
     character(len=4)   :: chain_text
     character(len=5)   :: i_text
-    character(len=128) :: filename
+    character(len=512) :: filename
 
     real(dp), allocatable, dimension(:)           :: nu, f2
     real(dp), allocatable, dimension(:,:)         :: f, map

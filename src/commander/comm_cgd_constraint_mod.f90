@@ -19,13 +19,13 @@ contains
     implicit none
 
     integer(i4b),       intent(in)    :: comm_chain_in, comm_data_in, comm_alms_in
-    character(len=128), intent(in)    :: paramfile
+    character(len=*), intent(in)    :: paramfile
     type(planck_rng),   intent(inout) :: handle 
 
     integer(i4b)       :: i, j, k, l, ind
     real(dp)           :: response, nu_eff, S_eff
-    character(len=2)   :: i_text, j_text
-    character(len=128) :: param_text, comp_type
+    character(len=:), allocatable :: i_text, j_text
+    character(len=512) :: param_text, comp_type
     real(dp),     allocatable, dimension(:,:) :: map
 
     comm_data = comm_data_in
@@ -41,7 +41,7 @@ contains
 
     num_constraints = 0
     do i = 1, numband
-       call int2string(i, i_text)
+       call index2string(i, i_text)
 
        if (sample_T_modes) then
           param_text = 'FIX_MONOPOLE' // i_text
@@ -52,7 +52,7 @@ contains
 
           if (sample_free_fg_temp) then
              do j = 5, num_free_fg_temp
-                call int2string(j-4, j_text)
+                call index2string(j-4, j_text)
                 param_text = 'FIX_FREE_TEMP' // i_text // '_' // j_text
                 call get_parameter(paramfile, trim(param_text), par_lgt=fix_free_temp(j,i))
              end do
@@ -61,7 +61,7 @@ contains
        else
 
           do j = 1, num_free_fg_temp
-             call int2string(j, j_text)
+             call index2string(j, j_text)
              param_text = 'FIX_FREE_TEMP' // i_text // '_' // j_text
              call get_parameter(paramfile, trim(param_text), par_lgt=fix_free_temp(j,i))
           end do
@@ -75,7 +75,7 @@ contains
     end do
 
     do i = 1, num_fg_signal
-       call int2string(i, i_text)
+       call index2string(i, i_text)
 
        param_text = 'COMP_TYPE' // i_text
        call get_parameter(paramfile, trim(param_text), par_string=comp_type) 

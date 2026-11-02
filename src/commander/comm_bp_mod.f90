@@ -9,7 +9,7 @@ module comm_bp_mod
   real(dp), parameter :: h        = 1.0545726691251021d-34 * 2.d0*pi !6.626068d-34
   real(dp), parameter :: c        = 2.99792458d8
   real(dp)            :: T_CMB    = 2.7255d0
-  character(len=128)  :: bp_model = 'additive_shift'
+  character(len=512)  :: bp_model = 'additive_shift'
 
   interface sz_thermo
      module procedure sz_thermo_single, sz_thermo_array
@@ -33,10 +33,11 @@ module comm_bp_mod
   real(dp)                                      :: ind_iras                                     
   integer(i4b)                                  :: numband
   integer(i4b)                                  :: color_corr_update_interval = 1
+  logical                                      :: fossil_exact_mjysr_units = .false.
   type(bandinfo),     allocatable, dimension(:) :: bp
   integer(i4b),       allocatable, dimension(:) :: i2f
 
-  character(len=256), private  :: MJySr_convention
+  character(len=512), private  :: MJySr_convention
 
 contains
 
@@ -44,14 +45,14 @@ contains
     character(len=*), intent(in) :: paramfile
     integer(i4b), intent(in) :: band
     logical(lgt), intent(in) :: polar
-    character(len=2) :: band_text
+    character(len=:), allocatable :: band_text
     character(len=1), parameter :: stokes(3) = ['I', 'Q', 'U']
     character(len=1), parameter :: order(3) = ['0', '1', '2']
-    character(len=128) :: key
+    character(len=512) :: key
     logical(lgt) :: have_low, have_high, found
     integer(i4b) :: s, j, nstokes, ierr
 
-    call int2string(band, band_text)
+    call index2string(band, band_text)
     bp(band)%cc_coeffs = 0.d0
     bp(band)%cc_coeffs(1,:) = 1.d0
     nstokes = 1
@@ -121,9 +122,9 @@ contains
     character(len=*), intent(in) :: paramfile
     integer(i4b), intent(in) :: band
     logical(lgt), intent(in) :: polar
-    character(len=2) :: band_text
+    character(len=:), allocatable :: band_text
 
-    call int2string(band, band_text)
+    call index2string(band, band_text)
     if (polar) call cbass_error(band, 'Only Stokes I is supported; set POLARIZATION=F.')
     if (trim(bp(band)%unit) /= 'uK_ant') &
          & call cbass_error(band, 'FREQ_UNIT must be uK_ant (Rayleigh-Jeans microkelvin).')
@@ -268,8 +269,8 @@ contains
     integer(i4b)        :: i, j, q, unit, myid_chain
     logical(lgt)        :: exist, apply_bp_corr, apply_gain_corr, apply_color_corr, found, polar
     real(dp)            :: threshold, gain_init_rms, bp_init_rms, ierr
-    character(len=2)    :: i_text
-    character(len=256)  :: filename, chaindir, gain_init_file, bp_init_file, MJySr_convention
+    character(len=:), allocatable :: i_text
+    character(len=512)  :: filename, chaindir, gain_init_file, bp_init_file, MJySr_convention
     character(len=5000) :: line
     real(dp), allocatable, dimension(:) :: freq, a2t
 
@@ -278,6 +279,9 @@ contains
     unit = getlun()
     call get_parameter(paramfile, 'NUMBAND',                par_int=numband)    
     call get_parameter(paramfile, 'T_CMB',                  par_dp=T_CMB)
+    call get_parameter(paramfile,'FOSSIL_EXACT_LOCAL_SEDS', &
+         par_lgt=fossil_exact_mjysr_units,par_present=found)
+    if (.not. found) fossil_exact_mjysr_units=.false.
     call get_parameter(paramfile, 'CHAIN_DIRECTORY',        par_string=chaindir)
     call get_parameter(paramfile, 'GAIN_INIT',              par_string=gain_init_file, &
          & path=base_path)
@@ -315,7 +319,7 @@ contains
 
     allocate(bp(numband))
     do i = 1, numband
-       call int2string(i, i_text)
+       call index2string(i, i_text)
        call get_parameter(paramfile, 'BANDPASS_TYPE'        // i_text, par_string=bp(i)%id)
        call get_parameter(paramfile, 'FREQ_C'               // i_text, par_dp=bp(i)%nu_c)
        bp(i)%nu_c = bp(i)%nu_c * 1.d9
@@ -788,6 +792,9 @@ contains
        ant2unit = compute_ant2thermo_single(nu_ref)
     else if (trim(unit_out) == 'MJy/sr') then
        ant2unit = compute_bnu_prime_RJ_single(nu_ref) * 1e14
+       ! Keep legacy runs unchanged, but avoid the rounded single-precision
+       ! 1e14 literal in a distortion forecast requiring exact unit round trips.
+       if (fossil_exact_mjysr_units) ant2unit=compute_bnu_prime_RJ_single(nu_ref)*1.d14
     else if (trim(unit_out) == 'K km/s') then
        !ant2unit = bp(band_ref)%a2t / bp(band_ref)%co2t
        !ant2unit = 1.d0 / (nu_ref/c)
@@ -972,7 +979,7 @@ contains
 
     integer(i4b)        :: i, j, unit, first, last, m
     logical(lgt)        :: exist
-    character(len=128)  :: string
+    character(len=512)  :: string
     real(dp), allocatable, dimension(:) :: x, y
 
     unit = getlun()

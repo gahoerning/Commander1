@@ -9,7 +9,7 @@ module comm_mcmc_mod
   integer(i4b),                              private :: nstep
   integer(i4b),                              private :: verbosity
   integer(i4b),                              private :: lmin_bin, lmax_bin, spec_bin
-  character(len=128),                        private :: operation, cdir
+  character(len=512),                        private :: operation, cdir
 
   real(dp),           allocatable, dimension(:,:),   private :: cls_prop
 
@@ -22,15 +22,15 @@ contains
     implicit none
 
     integer(i4b),                            intent(in) :: comm_master_in
-    character(len=128),                      intent(in) :: paramfile
+    character(len=*),                      intent(in) :: paramfile
 
     integer(i4b)       :: i, j, k, l, l1, l2, m, n, ierr
     real(dp)           :: mcmc_scale_fac, noise, cmb, a, b, c
-    character(len=128) :: filename
+    character(len=512) :: filename
     logical(lgt)       :: polarization, cl_binning, enforce_zero_cl
     real(dp),           allocatable, dimension(:)       :: input_vals
     real(dp),           allocatable, dimension(:,:,:,:) :: stddev
-    character(len=128), allocatable, dimension(:,:,:)   :: prop_type
+    character(len=512), allocatable, dimension(:,:,:)   :: prop_type
 
     comm_master = comm_master_in
     call mpi_comm_rank(MPI_COMM_WORLD, myid_master, ierr)

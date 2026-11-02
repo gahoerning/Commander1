@@ -61,7 +61,7 @@ contains
   subroutine read_beam(beamfile, beam)
     implicit none
 
-    character(len=128),                   intent(in)  :: beamfile
+    character(len=*),                   intent(in)  :: beamfile
     real(dp),           dimension(0:,1:), intent(out) :: beam
 
     integer(i4b) :: l, lmax, nmaps
@@ -358,13 +358,13 @@ contains
     implicit none
 
     integer(i4b),                   intent(in) :: chain, iteration
-    character(len=128),             intent(in) :: chain_dir
+    character(len=*),             intent(in) :: chain_dir
     real(dp),     dimension(0:,1:), intent(in) :: cls, sigmas
 
     integer(i4b)       :: l, i, j, ind, lmax, nmaps, nspec, unit
     character(len=4)   :: chain_text
     character(len=5)   :: i_text
-    character(len=128) :: filename
+    character(len=512) :: filename
 
     unit  = getlun()
     lmax  = size(cls(:,1))-1
@@ -403,7 +403,7 @@ contains
     integer(i4b)       :: i, j, l, m, npix, nmaps
     character(len=4)   :: chain_text
     character(len=5)   :: i_text
-    character(len=128) :: filename
+    character(len=512) :: filename
     real(dp),     allocatable, dimension(:,:)    :: map, gb
     complex(dpc), allocatable, dimension(:,:,:)  :: alms
 
@@ -454,13 +454,13 @@ contains
     implicit none
 
     integer(i4b),               intent(in) :: nside, lmax, chain, iteration
-    character(len=128),         intent(in) :: chain_dir
+    character(len=*),         intent(in) :: chain_dir
     real(dp), dimension(1:,1:), intent(in) :: s
 
     integer(i4b)       :: i, l, m, nmaps
     character(len=4)   :: chain_text
     character(len=5)   :: i_text
-    character(len=128) :: filename
+    character(len=512) :: filename
     complex(dpc), allocatable, dimension(:,:,:)  :: alms
 
     nmaps = size(s(1,:))
@@ -483,12 +483,12 @@ contains
     implicit none
 
     integer(i4b),               intent(in) :: chain, iteration
-    character(len=128),         intent(in) :: chain_dir
+    character(len=*),         intent(in) :: chain_dir
     real(dp), dimension(0:,1:), intent(in) :: chisq
 
     character(len=4)   :: chain_text
     character(len=5)   :: i_text
-    character(len=128) :: filename
+    character(len=512) :: filename
        
     call int2string(chain,     chain_text)
     call int2string(iteration, i_text)
@@ -657,6 +657,19 @@ contains
 
   end subroutine int2string
 
+  subroutine index2string(integer, string)
+    ! Preserve legacy 01..99 keys while allowing 100 and higher band indices.
+    integer(i4b), intent(in) :: integer
+    character(len=:), allocatable, intent(out) :: string
+    character(len=32) :: buffer
+    integer :: width
+    write(buffer,'(i0)') integer
+    width=max(2,len_trim(buffer))
+    allocate(character(len=width) :: string)
+    call int2string(integer,string)
+  end subroutine index2string
+
+
 
 
   ! *****************************************************************************************
@@ -680,7 +693,7 @@ contains
 !!$
 !!$
 !!$    integer(i4b)        :: i, unit
-!!$    character(len=128)  :: string, variable, value
+!!$    character(len=512)  :: string, variable, value
 !!$    character(len=1)    :: equals
 !!$
 !!$    unit = getlun()
@@ -783,7 +796,8 @@ contains
     logical(lgt)               :: found
     integer(i4b), parameter    :: maxdepth = 256
     integer(i4b)               :: depth, units(maxdepth), i
-    character(len=512)         :: key, value, filenames(maxdepth), line
+    character(len=512)         :: key, value, filenames(maxdepth)
+    character(len=2048)        :: line
     character(len=1)           :: equals
 
     depth = 1
@@ -935,7 +949,7 @@ contains
   subroutine parse_parameter(line, parname, found, par_int, par_char, par_string, par_sp, par_dp, par_lgt)
     implicit none
     character(len=*)           :: line, parname
-    character(len=256)         :: toks(2), key, value, par
+    character(len=2048)        :: toks(2), key, value, par
     logical(lgt)               :: found
     integer(i4b),     optional :: par_int
     character(len=*), optional :: par_char
@@ -1094,7 +1108,7 @@ contains
     implicit none
     character(len=*) :: string, sep
     character(len=*), optional   :: group
-    character(len=256)  :: op, cl
+    character(len=512)  :: op, cl
     integer(i4b), save           :: level(256), nl
     integer(i4b), intent(inout)  :: ext(2)
     logical(lgt), optional       :: allow_empty
@@ -1190,7 +1204,7 @@ contains
   subroutine read_map(filename, map)
     implicit none
 
-    character(len=128),                 intent(in)  :: filename
+    character(len=*),                 intent(in)  :: filename
     real(dp),         dimension(0:,1:), intent(out) :: map
 
     integer(i4b)   :: nside, nmaps, ordering, int_npix, temp_i, i, npix, nmaps_in, nside_in
@@ -1225,7 +1239,7 @@ contains
     integer(i4b),             intent(in)  :: nside
     real(dp), dimension(:,:), intent(out) :: weights
 
-    character(len=128)  :: weight_file
+    character(len=512)  :: weight_file
     character(len=5)    :: nside_text
     logical(lgt)        :: exist, anynull
     integer(i4b)        :: nmaps
@@ -1432,10 +1446,10 @@ contains
     logical(lgt)       :: exist
     character(len=4)   :: chain_text
     character(len=5)   :: k_text
-    character(len=128) :: filename
+    character(len=512) :: filename
     real(dp),     allocatable, dimension(:,:,:) :: alms_in
     complex(dpc), allocatable, dimension(:,:,:) :: alms_cmplx
-    character(len=128), dimension(1:80,1)       :: header
+    character(len=512), dimension(1:80,1)       :: header
 
     unit            = getlun()
     first_iteration = 1
@@ -1646,7 +1660,7 @@ contains
   subroutine write_s_lm(filename, alms)
     implicit none
     
-    character(len=128),                      intent(in) :: filename
+    character(len=*),                      intent(in) :: filename
     complex(dpc),       dimension(1:,0:,0:), intent(in) :: alms
 
     integer(i4b) :: i, l, m, lmax, nmaps, nlheader
@@ -1802,7 +1816,7 @@ contains
     real(dp),     pointer, dimension(:,:)              :: pixwin
 
     integer(i4b)        :: nc
-    character(len=128)  :: pixwin_file
+    character(len=512)  :: pixwin_file
     character(len=4)    :: nside_text
     logical(lgt)        :: exist, anynull
     real(dp)            :: nullval
