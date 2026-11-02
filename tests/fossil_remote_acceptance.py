@@ -2,7 +2,8 @@
 """Run full Commander FOSSIL acceptance tests on a configured MPI machine.
 
 This script does not build Commander. The default 131-band run requires 131 MPI
-ranks. Use --launcher 'srun --ntasks={ranks}' for a Slurm allocation. All process
+ranks; --band-count 64 selects the documented 64-channel analysis profile. Use
+--launcher 'srun --ntasks={ranks}' for a Slurm allocation. All process
 arguments are passed without a shell. A nonzero exit or invalid output fails.
 """
 from __future__ import annotations
@@ -46,16 +47,59 @@ def load_trace(directory: Path, chain: int = 1):
     return array[:, [names.index(name) for name in canonical]]
 
 
+def selected_frequencies(parameters: dict) -> list[float]:
+    """Read active band frequencies, never infer source IDs from active indices."""
+    count = int(parameters["NUMBAND"])
+    if count < 1:
+        raise ValueError("NUMBAND must be positive")
+    frequencies = [float(parameters["FREQ_C" + generator.band_suffix(i)]) for i in range(1, count + 1)]
+    if not np.isfinite(frequencies).all() or min(frequencies) <= 0:
+        raise ValueError("Active FREQ_C values must be finite and positive")
+    for i, frequency in enumerate(frequencies):
+        if np.any(np.isclose(frequency, frequencies[:i], rtol=1e-12, atol=1e-9)):
+            raise ValueError(f"Duplicate active frequency: {frequency} GHz")
+    return frequencies
+
+
 def gaussian_reference(export_root: Path, nside: int, parameters: dict):
+    frequencies = selected_frequencies(parameters)
     with (export_root / "global_response.csv").open() as handle:
         rows = list(csv.DictReader(handle))
-    responses = {int(row["band"]): [float(row[key]) for key in AMPLITUDES] for row in rows}
+    source_ids = [int(row["band"]) for row in rows]
+    if len(set(source_ids)) != len(source_ids):
+        raise ValueError("Duplicate source band in global_response.csv")
+    source_frequencies = np.array([float(row["frequency_GHz"]) for row in rows])
+    if not np.isfinite(source_frequencies).all() or np.any(source_frequencies <= 0):
+        raise ValueError("Invalid source frequency in global_response.csv")
+    selected_rows = []
+    for frequency in frequencies:
+        matches = np.flatnonzero(np.isclose(source_frequencies, frequency, rtol=1e-12, atol=1e-9))
+        if len(matches) != 1:
+            raise ValueError(f"Active frequency {frequency} GHz has {len(matches)} source response matches")
+        selected_rows.append(rows[int(matches[0])])
     reference = json.loads((export_root / "global_reference.json").read_text())[str(nside)]
-    bands = reference["bands"]
-    design = np.array([responses[int(b["band"])] for b in bands])
+    source_stats = {int(b["band"]): b for b in reference["bands"]}
+    if len(source_stats) != len(reference["bands"]):
+        raise ValueError("Duplicate source band in global_reference.json")
+    bands = []
+    for row in selected_rows:
+        source_id = int(row["band"])
+        if source_id not in source_stats:
+            raise ValueError(f"Missing sufficient statistics for source band {source_id}")
+        stats = source_stats[source_id]
+        if "frequency_GHz" in stats and not np.isclose(float(stats["frequency_GHz"]),
+                                                        float(row["frequency_GHz"]), rtol=1e-12, atol=1e-9):
+            raise ValueError(f"Inconsistent response/statistics frequency for source band {source_id}")
+        bands.append(stats)
+    design = np.array([[float(row[key]) for key in AMPLITUDES] for row in selected_rows])
     weights = np.array([b["weight"] for b in bands], dtype=float)
     weighted_sum = np.array([b["weighted_sum"] for b in bands], dtype=float)
     scales = np.array([parameters[f"GLOBAL_SCALE{i:02d}"] for i in range(1, 7)])
+    if (not np.isfinite(design).all() or not np.isfinite(weights).all()
+            or not np.isfinite(weighted_sum).all() or np.any(weights < 0) or not np.any(weights > 0)):
+        raise ValueError("Invalid selected response or sufficient statistics")
+    if not np.isfinite(scales).all() or np.any(scales <= 0):
+        raise ValueError("Global amplitude scales must be finite and positive")
     scaled = design * scales
     precision = scaled.T @ (weights[:, None] * scaled)
     rhs = scaled.T @ weighted_sum
@@ -71,6 +115,7 @@ def gaussian_reference(export_root: Path, nside: int, parameters: dict):
     mean = np.linalg.solve(correlation_chol.T, np.linalg.solve(correlation_chol, rhs / diagonal)) / diagonal
     chol = diagonal[:, None] * correlation_chol
     return dict(scales=scales, chol=chol, mean=mean,
+                frequencies_GHz=frequencies, source_bands=[int(row["band"]) for row in selected_rows],
                 scaled_condition_number=float(np.linalg.cond(precision)),
                 normalized_condition_number=float(np.linalg.cond(correlation)))
 
@@ -85,6 +130,18 @@ def check_stage(export_root: Path, nside: int, stage: str, parameters: dict, dir
         raise AssertionError("Trace omitted accepted Gibbs iterations; scalar output must not use map thinning")
     amplitudes = trace[:, 1:7]
     result = dict(stage=stage, iterations=len(trace), finite=True)
+    if stage == "amplitudes_optimize":
+        log = directory / "commander.log"
+        if not log.is_file():
+            raise AssertionError("Local-amplitude optimize acceptance requires commander.log CG evidence")
+        lines = log.read_text().splitlines()
+        started = sum("Starting CG search" in line for line in lines)
+        completed = sum("number of CGD iterations" in line for line in lines)
+        required = max(int(parameters["NUM_GIBBS_ITER"]), len(trace))
+        if started < required or completed < required:
+            raise AssertionError(f"CG did not run and finish for every accepted iteration: "
+                                 f"starts={started}, completions={completed}, required={required}")
+        result.update(cg_searches_started=started, cg_searches_completed=completed)
     if stage == "globals_optimize":
         truth = np.array([parameters[f"GLOBAL_PRIOR_MEAN{i:02d}"] for i in range(1, 7)])
         scales = np.array([parameters[f"GLOBAL_SCALE{i:02d}"] for i in range(1, 7)])
@@ -100,6 +157,8 @@ def check_stage(export_root: Path, nside: int, stage: str, parameters: dict, dir
         if len(draws) < 500:
             raise AssertionError("Gaussian covariance acceptance requires at least 500 retained draws")
         whitened = (draws / reference["scales"] - reference["mean"]) @ reference["chol"]
+        if not np.isfinite(whitened).all():
+            raise AssertionError("Gaussian posterior comparison produced nonfinite values")
         mean_z = np.sqrt(len(draws)) * whitened.mean(axis=0)
         covariance = np.cov(whitened, rowvar=False)
         covariance_z = (covariance - np.eye(6)) / np.sqrt((1 + np.eye(6)) / (len(draws) - 1))
@@ -110,9 +169,10 @@ def check_stage(export_root: Path, nside: int, stage: str, parameters: dict, dir
             raise AssertionError("Sample mode returned fixed amplitudes instead of stochastic posterior draws")
         result.update(max_mean_z=float(np.max(np.abs(mean_z))),
                       max_covariance_z=float(np.max(np.abs(covariance_z))),
+                      source_bands=reference["source_bands"], frequencies_GHz=reference["frequencies_GHz"],
                       scaled_condition_number=reference["scaled_condition_number"],
                       normalized_condition_number=reference["normalized_condition_number"])
-    if stage in ("globals_optimize", "globals_sample", "amplitudes_sample"):
+    if stage in ("globals_optimize", "globals_sample", "amplitudes_sample", "amplitudes_optimize"):
         expected_shapes = np.array([1.245, 0.86, 18.8])
         if not np.allclose(trace[:, 7:], expected_shapes, rtol=0, atol=1e-12):
             raise AssertionError("A fixed global shape parameter changed")
@@ -161,17 +221,20 @@ def execute(binary: Path, launcher: str, ranks: int, config: Path, directory: Pa
 
 
 def run(args):
+    if args.band_count == 64 and args.legacy_commander is not None:
+        raise ValueError("--band-count 64 cannot be combined with the separate 99-band legacy control")
     manifest = json.loads(args.manifest.read_text())
     export_root = args.manifest.resolve().parent
     args.run_root.mkdir(parents=True, exist_ok=True)
     reports = []
     for nside in args.nside:
         for stage in args.stage:
-            directory = args.run_root.resolve() / f"n{nside}_{stage}_s{args.seed}"
-            config = args.run_root.resolve() / f"n{nside}_{stage}.par"
+            subset_tag = "_64bands" if args.band_count == 64 else ""
+            directory = args.run_root.resolve() / f"n{nside}_{stage}{subset_tag}_s{args.seed}"
+            config = args.run_root.resolve() / f"n{nside}_{stage}{subset_tag}.txt"
             p = generator.build_parameters(manifest, nside, stage, str(export_root), str(directory),
                                            seed=args.seed, proc_per_band=args.proc_per_band,
-                                           iterations=args.iterations)
+                                           iterations=args.iterations, band_count=args.band_count)
             legacy_control = stage == "no_globals_regression" and args.legacy_commander is not None
             if legacy_control:
                 # Legacy executables cannot express 100+ band identifiers or the
@@ -191,12 +254,13 @@ def run(args):
                         args.run_root.resolve(), args.timeout)
             report = check_stage(export_root, nside, stage, p, directory)
             report.update(nside=nside, ranks=ranks, config=str(config),
+                          band_count=p["NUMBAND"], frequencies_GHz=selected_frequencies(p),
                           manifest_signature=manifest.get("signature"))
             if legacy_control:
                 report["control"] = "99 bands; exact-local-SED option disabled in both legacy and patched runs"
             if stage == "no_globals_regression" and args.legacy_commander:
                 old_directory = directory.with_name(directory.name + "_legacy")
-                old_config = config.with_name(config.stem + "_legacy.par")
+                old_config = config.with_name(config.stem + "_legacy.txt")
                 p["CHAIN_DIRECTORY"] = str(old_directory)
                 old_config.write_text(generator.render(p, stage, nside))
                 if not args.check_only:
@@ -262,6 +326,8 @@ def main():
     runner.add_argument("--stage", nargs="+", choices=list(generator.STAGES),
                         default=["globals_optimize", "globals_sample"])
     runner.add_argument("--proc-per-band", type=int, choices=[1, 2, 4], default=1)
+    runner.add_argument("--band-count", type=int, choices=[64, 131], default=131,
+                        help="64 frequency-spanning channels for a single 64-core node, or the full 131")
     runner.add_argument("--iterations", type=int)
     runner.add_argument("--seed", type=int, default=20261102)
     runner.add_argument("--timeout", type=int, default=86400)

@@ -19,6 +19,7 @@ module comm_Cl_util_mod
   character(len=1), allocatable, dimension(:,:) :: Cl_bin_stat
  
   integer(i4b),               private :: nspec, lmax
+  integer(i4b),               private :: fossil_cmb_min_l=0
   integer(i4b), parameter,    private :: MAX_NUM_BIN = 10000
 
 contains
@@ -39,6 +40,12 @@ contains
     unit = getlun()
     call get_parameter(paramfile, 'POLARIZATION',       par_lgt=polarization)
     call get_parameter(paramfile, 'LMAX',               par_int=lmax)
+    call get_parameter(paramfile,'FOSSIL_CMB_MIN_L',par_int=fossil_cmb_min_l,par_present=ok)
+    if (.not. ok) fossil_cmb_min_l=0
+    if (fossil_cmb_min_l/=0 .and. fossil_cmb_min_l/=2) then
+       write(*,*) 'FOSSIL_CMB_MIN_L must be 0 (legacy) or 2 (anisotropies only).'
+       call mpi_abort(MPI_COMM_WORLD,1,i)
+    end if
 
     if (polarization) then
        nspec = 6
@@ -215,6 +222,7 @@ contains
        ! Set monopole and dipole to a large value
        cls_out(0:1,1) = 1.d3
     end if
+    if (fossil_cmb_min_l>0) cls_out(0:fossil_cmb_min_l-1,:)=0.d0
 
     deallocate(cl, cl_in, buffer)
 

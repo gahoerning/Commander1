@@ -1,6 +1,7 @@
 module comm_fossil_global_mod
   ! Physical, spatially constant sky components. Amplitudes use native physical
-  ! units; their channel responses and all FOSSIL data are in MJy/sr.
+  ! units. Physical spectra remain MJy/sr; likelihood responses use each
+  ! observed band's declared unit, with standard Commander calibration factors.
   use comm_utils
   use comm_bp_mod, only: bp, numband
   use comm_fossil_sed_mod, only: fossil_sed_table, fossil_sed_value, fossil_load_sed_table
@@ -25,7 +26,7 @@ module comm_fossil_global_mod
   integer :: num_global_components=0, slice_steps=8, fossil_restart_iteration=0
   logical :: global_fixed_instrument=.true.
   type(global_component), allocatable :: components(:), previous(:)
-  real(dp), allocatable :: response(:,:), global_signal(:)
+  real(dp), allocatable :: response(:,:), global_signal(:), mjy_to_band(:)
   type(planck_rng) :: global_rng, previous_rng
   character(len=16) :: global_operation
   character(len=512) :: restart_file='none'
@@ -44,14 +45,14 @@ contains
     character(len=128) :: key
     character(len=512) :: filename
     logical :: found, polar, fixed
-    integer :: i,j,b,status,ntemp,unit,ios,version,nstored
+    integer :: i,j,b,status,ntemp,unit,ios,version,nstored,world_rank,mpi_status
     real(dp) :: rms
     call get_parameter(paramfile,'NUM_GLOBAL_COMPONENTS',par_int=num_global_components,par_present=found)
     if (.not. found) num_global_components=0
     allocate(global_signal(numband)); global_signal=0.d0
     if (num_global_components==0) return
     if (num_global_components<0 .or. num_global_components>99) call fossil_global_error('Invalid component count.')
-    allocate(components(num_global_components),response(numband,num_global_components))
+    allocate(components(num_global_components),response(numband,num_global_components),mjy_to_band(numband))
     call rand_init(global_rng,seed)
     ! rand_init leaves the unused Box--Muller cache undefined. Persist a fully
     ! defined state even when only uniform spectral draws have been requested.
@@ -71,7 +72,16 @@ contains
     if (slice_steps<1) call fossil_global_error('GLOBAL_SLICE_STEPS must be positive.')
     call get_parameter(paramfile,'GLOBAL_RESTART_FILE',par_string=restart_file,par_present=found,path=base_path)
     do b=1,numband
-       if (trim(bp(b)%unit)/='MJy/sr') call fossil_global_error('All FOSSIL FREQ_UNIT values must be MJy/sr.')
+       select case(trim(bp(b)%unit))
+       case('MJy/sr')
+          mjy_to_band(b)=1.d0
+       case('uK_cmb')
+          mjy_to_band(b)=bp(b)%f2t
+          if (.not. ieee_is_finite(mjy_to_band(b)) .or. mjy_to_band(b)<=0.d0) &
+               call fossil_global_error('uK_cmb bands require a finite positive MJy/sr-to-uK_cmb calibration.')
+       case default
+          call fossil_global_error('FOSSIL FREQ_UNIT must be MJy/sr or uK_cmb.')
+       end select
        ! Finite-band calibration conventions differ between instruments. Refuse
        ! them here until matching integration has been independently validated.
        if (trim(bp(b)%id)/='delta') call fossil_global_error('Use delta bands matching the monochromatic simulation.')
@@ -91,6 +101,11 @@ contains
          if (.not. fixed) call fossil_global_error('Fix all instrumental dipoles in the baseline.')
        end block
     end do
+    if (any(bp%unit=='uK_cmb')) then
+       call mpi_comm_rank(MPI_COMM_WORLD,world_rank,mpi_status)
+       if (world_rank==0) write(*,'(a)') &
+            'FOSSIL_NATIVE_UNIT_INTERFACE_V1: physical global spectra converted to native band likelihood units.'
+    end if
     call get_parameter(paramfile,'NUM_FG_TEMP',par_int=ntemp)
     if (ntemp/=0) call fossil_global_error('The FOSSIL baseline requires NUM_FG_TEMP=0.')
     do i=1,num_global_components
@@ -197,6 +212,7 @@ contains
        do b=1,numband
           response(b,i)=fossil_sed_value(trim(components(i)%kind),bp(b)%nu_c/1.d9, &
                components(i)%shape(:components(i)%nshape),table=components(i)%table,status=status)
+          response(b,i)=response(b,i)*mjy_to_band(b)
           if (status/=0 .or. .not. ieee_is_finite(response(b,i))) &
                call fossil_global_error('Invalid global SED or template frequency range.')
        end do
@@ -333,6 +349,7 @@ contains
           if (j==ci) then
              v=fossil_sed_value(trim(components(j)%kind),bp(b)%nu_c/1.d9, &
                   shape(:components(j)%nshape),table=components(j)%table,status=status)
+             v=v*mjy_to_band(b)
              if (status/=0 .or. .not. ieee_is_finite(v)) then
                 logp=-huge(1.d0)/100.d0; return
              end if
@@ -465,7 +482,11 @@ contains
     open(unit,file=trim(filename),status='replace')
     write(unit,'(a)') '# frequency_GHz total_MJy_sr followed by components in configuration order'
     do i=1,numband
-       write(unit,*) bp(i)%nu_c/1.d9,global_signal(i),response(i,:)*components%amplitude
+       ! Use an explicit single-record format: list-directed output may wrap
+       ! long rows differently across compilers. This snapshot is physical
+       ! MJy/sr even when the likelihood and residual maps use uK_cmb.
+       write(unit,'(*(es26.17,1x))') bp(i)%nu_c/1.d9,global_signal(i)/mjy_to_band(i), &
+            response(i,:)*components%amplitude/mjy_to_band(i)
     end do
     close(unit)
   end subroutine

@@ -1,0 +1,2207 @@
+# Active model: planck_draine_gaunt_plus_primary_cmb
+# Export manifest signature: cff28d9447fc29b5fb69d1fb84e8c223943a0c04e874e17ff24697ab87090fdc
+# Analysis signature: c286eea929abed8028043cb7f7cf4e219c07acd89cbfcb2e13d825605c67eb9b
+# Fixed 64-channel profile SHA256: 8a8f651e259d5c964a93864d0dc7f9f43e70b69d88c42001e6044bb720b91ad1
+# Suite case: 12; seed: 20261102; first iteration: 1001
+# Parameter file for Commander - FOSSIL component separation
+# Stage: globals_sample_resume2000; NSIDE: 64; active channels: 64
+# Purpose: Resume the global state/RNG control and compare with its uninterrupted chain.
+# Data: signal plus Gaussian noise.
+# Sky-intensity maps and RMS maps: MJy/sr; Galactic coordinates; HEALPix RING.
+# Gaussian beam: 1.6 degrees FWHM (96 arcmin).
+# The TXT specifies sigma per pixel, unchanged between NSIDE 64 and 128.
+# The reference CMB blackbody is subtracted; physical DeltaT/distortions remain.
+# Primary CMB anisotropy: included; harmonic monopole/dipole fixed to zero.
+# Instrumental offsets/dipoles = 0, gains = 1, and bandpass shifts = 0.
+# Contents: run/MPI; resolution; chain; solver; CMB; outputs; paths/masks;
+#           instrument; frequency maps; Galactic components; physical monopoles.
+# Likelihood: FULL SKY. Apply GAL070 only to output maps/statistics after fitting.
+
+# ----------------------------------------------------------------------------
+# 01. Run mode and logging
+# ----------------------------------------------------------------------------
+
+OPERATION                              = 'sample'           # optimize = point estimates; sample = posterior draws
+VERBOSITY                              = 3                  # 0 = silent, 1 = chatty, 2 = lots, 3 = debug
+
+# ----------------------------------------------------------------------------
+# 02. MPI layout
+# ----------------------------------------------------------------------------
+# Required MPI ranks = NUM_GROUPS * NUMBAND * NUM_PROC_PER_BAND.
+# Use one OpenMP/BLAS thread per MPI rank.
+
+NUM_REALIZATIONS                       = 1
+NUM_CHAIN_PER_REALIZATION              = 1                  # Equal to NUM_GROUPS in this setup
+NUM_GROUPS                             = 1
+NUMBAND                                = 64                 # Active frequency maps in the likelihood
+NUM_PROC_PER_BAND                      = 1                  # Pixel partitions per frequency band
+
+# ----------------------------------------------------------------------------
+# 03. Map resolution and spectral-parameter resolution
+# ----------------------------------------------------------------------------
+
+NSIDE                                  = 64                 # HEALPix resolution of input maps
+LMAX                                   = 191                # 3 * NSIDE - 1
+LMAX_LOWRES                            = 191
+FWHM_LOWRES                            = 96                 # arcmin; 96 arcmin = 1.6 degrees FWHM
+PRECOMPUTE_PLMS                        = 0
+
+# ----------------------------------------------------------------------------
+# 04. Chain length, random seed, and spectral sampling
+# ----------------------------------------------------------------------------
+
+NUM_GIBBS_ITER                         = 2000               # Final iteration number, including when resuming
+NUM_STEP_WITH_ML_SEARCH                = 0                  # No initial ML-only segment in sample mode
+NUM_FAST_SUBSTEPS                      = 1
+THINNING_FACTOR                        = 1
+OUTPUT_THINNING_FACTOR                 = 100                # Map output cadence; global scalar trace is written every iteration
+BASE_SEED                              = 20261102           # Independent chain seed; keep unchanged for the restart control
+
+SPECIND_SAMPLER_BLOCKSIZE              = 10000000
+RMS_SPEC_INDEX_RANDOM_WALK             = 0                  # Zero random-walk perturbation in this setup
+NUMGRID_SPLINE                         = 1000
+
+# ----------------------------------------------------------------------------
+# 05. Amplitude solver and CG convergence
+# ----------------------------------------------------------------------------
+
+SAMPLING_METHOD                        = 'joint_sampler'
+SOLUTION_METHOD                        = 'CG'
+LMAX_PRECOND                           = 50
+PRECOND_MATRIX_METHOD                  = 'diagonal'
+CGD_MAXITER                            = 10000              # Maximum iterations in each conjugate-gradient solve
+CGD_TOLERANCE                          = 1d-09              # Fractional CG convergence criterion
+
+# ----------------------------------------------------------------------------
+# 06. Polarization and CMB harmonic controls
+# ----------------------------------------------------------------------------
+# Intensity-only forecast; CMB covariance is fixed when its harmonic realization is free.
+
+POLARIZATION                           = .false.
+SAMPLE_TT_MODES                        = .true.
+SAMPLE_TE_MODES                        = .false.
+SAMPLE_TB_MODES                        = .false.
+SAMPLE_EE_MODES                        = .false.
+SAMPLE_EB_MODES                        = .false.
+SAMPLE_BB_MODES                        = .false.
+
+FOSSIL_CMB_MIN_L                       = 2                  # Lowest allowed harmonic multipole; exclude CMB monopole/dipole
+FOSSIL_SI_CMB                          = .true.             # Use the SI CMB derivative, consistent with the physical DeltaT monopole
+CONDITION_ON_CL                        = .true.
+ENFORCE_ZERO_CL                        = .true.             # True = no harmonic CMB solve; a fixed pixel CMB map may still be present
+IN_POWSPECFILE                         = '/mn/stornext/d23/cmbco/AST9240/2024/gabrieah/fossil_component_separation/fossil_inputs_cmb_draine/nside64/cmb/CMB_Planck2018_Dl_TT_commander.txt'
+DISPERSION_FACTOR                      = 1
+CL_BINNING                             = .false.
+BINFILE                                = 'none'
+NUM_JOINT_ALMS_CL_STEPS                = 0                  # Joint harmonic-spectrum moves disabled
+JOINT_ALMS_CL_CHISQ_THRESHOLD          = 20
+CMB_MONO_DIPOLE_MASK                   = 'none'
+
+# ----------------------------------------------------------------------------
+# 07. Output products
+# ----------------------------------------------------------------------------
+
+OUTPUT_ALMS                            = .false.
+OUTPUT_MAPS                            = .false.
+OUTPUT_SPECTRA                         = .false.
+OUTPUT_FOREGROUNDS                     = .true.             # Save component amplitude/spectral outputs
+OUTPUT_CHISQ                           = .true.             # Save chi-square diagnostics
+OUTPUT_MIXING_MATRIX                   = .false.
+OUTPUT_BAND_CHISQ                      = .true.
+OUTPUT_GAIN_RESIDUALS                  = .false.
+OUTPUT_ML_MAP_AND_COVMAT               = .false.
+OUTPUT_CMB_FREQUENCY_MAPS              = .false.
+OUTPUT_CROSS_CORRELATION_STATS         = .false.
+NUM_OBJECTS                            = 0
+
+# ----------------------------------------------------------------------------
+# 08. Input/output paths and analysis masks
+# ----------------------------------------------------------------------------
+# Input map/template paths below are relative to INPUT_DIRECTORY.
+# Use a fresh CHAIN_DIRECTORY for an independent run.
+
+INPUT_DIRECTORY                        = '/mn/stornext/d23/cmbco/AST9240/2024/gabrieah/fossil_component_separation/fossil_inputs_cmb_draine'
+CHAIN_DIRECTORY                        = '/mn/stornext/d23/cmbco/AST9240/2024/gabrieah/fossil_component_separation/tests_64channels_cmb_draine_fullsky/nside64/globals_sample_resume2000_64bands_seed20261102'
+
+MASKFILE                               = 'nside64/mask_fullsky.fits' # Full-sky likelihood mask
+MASKFILE_CORR                          = 'nside64/mask_fullsky.fits'
+PROCESSING_MASK                        = 'nside64/mask_fullsky.fits'
+SAMPLE_INSIDE_MASK                     = .false.            # No additional inside-mask sampling
+OVERVIEW_MASK_HIGHFG                   = 'nside64/mask_fullsky.fits'
+OVERVIEW_MASK_LOWFG                    = 'nside64/mask_fullsky.fits'
+OVERVIEW_FREQ_MIN                      = 50
+OVERVIEW_FREQ_MAX                      = 2000
+GAIN_APODIZATION_MASK                  = 'nside64/mask_fullsky.fits'
+FWHM_APOD_GAINMASK                     = 0
+CORR_CHISQ_THRESHOLD                   = 30
+LMAX_CORR                              = 191
+NSIDE_CORR                             = 16
+
+# ----------------------------------------------------------------------------
+# 09. Noise, beam, units, and fixed instrument
+# ----------------------------------------------------------------------------
+# Known per-pixel RMS; no extra regularization noise or fitted noise scaling.
+# Instrumental offsets are separate from the physical monopoles in section 12.
+# PIXEL_WINDOW uses the original full-length HEALPix table from INPUT_DIRECTORY.
+# Legacy read_pixwin also needs pixel_window_n0064.fits in the process working directory.
+# The supplied launcher provides this working-directory link before MPI.
+
+NOISE_FORMAT                           = 'rms'
+REGULARIZATION_NOISE                   = 0                  # No extra noise added to the maps
+BEAM_CONVOLUTION_METHOD                = 'transfer_function'
+PIXEL_WINDOW                           = 'pixel_window_n0064.fits' # Native HEALPix temperature/polarization window; ell = 0 through 4 * NSIDE
+T_CMB                                  = 2.725              # K; reference blackbody temperature
+MJYSR_CONVENTION                       = 'PSM'              # Matched intensity convention of the input export
+
+APPLY_BP_CORRECTIONS                   = .false.
+APPLY_GAIN_CORRECTIONS                 = .false.
+APPLY_COLOR_CORRECTIONS                = .false.
+NUM_BP_MCMC_SUBSTEPS                   = 0
+TEMPLATE_AMP_INPUT                     = 'none'
+GAIN_INIT                              = 'none'
+BANDPASS_INIT                          = 'none'
+GAIN_INIT_RMS                          = 0
+BP_INIT_RMS                            = 0
+SOLAR_AMP                              = 0
+SOLAR_LON                              = 0
+SOLAR_LAT                              = 0
+
+# ----------------------------------------------------------------------------
+# 10. Frequency map sets
+# ----------------------------------------------------------------------------
+# Each block is one active Commander band; the label retains its original FOSSIL ID.
+# RMS maps retain the TXT standard deviation per pixel for every resolution.
+# FIX_MONOPOLE/FIX_DIPOLE fix instrumental offsets, not physical sky monopoles.
+
+# ------------ Band 01: 50 GHz | FOSSIL_001
+FREQ_LABEL01                           = 'FOSSIL_001'
+FREQ_UNIT01                            = 'MJy/sr'
+FREQ_C01                               = 50
+MAP01_0001                             = 'nside64/maps/map_FOSSIL_0050GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS01                            = 'nside64/maps/rms_FOSSIL_0050GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB01                       = 'nside64/mask_fullsky.fits'
+
+BEAM01                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE01                        = 'delta'
+BP_RMS01                               = 0
+A2T01                                  = 0
+F2T01                                  = 0
+CO2T01                                 = 0
+A2SZ01                                 = 0
+
+FIX_MONOPOLE01                         = .true.
+FIX_DIPOLE01                           = .true.
+REG_NOISE_SCALE01                      = 0
+NOISEAMP_PRIOR_MEAN01                  = 1
+NOISEAMP_PRIOR_RMS01                   = 0
+GAIN_PRIOR_MEAN01                      = 1
+GAIN_PRIOR_RMS01                       = 0
+GAIN_CALIB_COMPONENT01                 = 1
+GAIN_LMIN01                            = -1
+GAIN_LMAX01                            = -1
+
+# ------------ Band 02: 65 GHz | FOSSIL_002
+FREQ_LABEL02                           = 'FOSSIL_002'
+FREQ_UNIT02                            = 'MJy/sr'
+FREQ_C02                               = 65
+MAP02_0001                             = 'nside64/maps/map_FOSSIL_0065GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS02                            = 'nside64/maps/rms_FOSSIL_0065GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB02                       = 'nside64/mask_fullsky.fits'
+
+BEAM02                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE02                        = 'delta'
+BP_RMS02                               = 0
+A2T02                                  = 0
+F2T02                                  = 0
+CO2T02                                 = 0
+A2SZ02                                 = 0
+
+FIX_MONOPOLE02                         = .true.
+FIX_DIPOLE02                           = .true.
+REG_NOISE_SCALE02                      = 0
+NOISEAMP_PRIOR_MEAN02                  = 1
+NOISEAMP_PRIOR_RMS02                   = 0
+GAIN_PRIOR_MEAN02                      = 1
+GAIN_PRIOR_RMS02                       = 0
+GAIN_CALIB_COMPONENT02                 = 1
+GAIN_LMIN02                            = -1
+GAIN_LMAX02                            = -1
+
+# ------------ Band 03: 80 GHz | FOSSIL_003
+FREQ_LABEL03                           = 'FOSSIL_003'
+FREQ_UNIT03                            = 'MJy/sr'
+FREQ_C03                               = 80
+MAP03_0001                             = 'nside64/maps/map_FOSSIL_0080GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS03                            = 'nside64/maps/rms_FOSSIL_0080GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB03                       = 'nside64/mask_fullsky.fits'
+
+BEAM03                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE03                        = 'delta'
+BP_RMS03                               = 0
+A2T03                                  = 0
+F2T03                                  = 0
+CO2T03                                 = 0
+A2SZ03                                 = 0
+
+FIX_MONOPOLE03                         = .true.
+FIX_DIPOLE03                           = .true.
+REG_NOISE_SCALE03                      = 0
+NOISEAMP_PRIOR_MEAN03                  = 1
+NOISEAMP_PRIOR_RMS03                   = 0
+GAIN_PRIOR_MEAN03                      = 1
+GAIN_PRIOR_RMS03                       = 0
+GAIN_CALIB_COMPONENT03                 = 1
+GAIN_LMIN03                            = -1
+GAIN_LMAX03                            = -1
+
+# ------------ Band 04: 95 GHz | FOSSIL_004
+FREQ_LABEL04                           = 'FOSSIL_004'
+FREQ_UNIT04                            = 'MJy/sr'
+FREQ_C04                               = 95
+MAP04_0001                             = 'nside64/maps/map_FOSSIL_0095GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS04                            = 'nside64/maps/rms_FOSSIL_0095GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB04                       = 'nside64/mask_fullsky.fits'
+
+BEAM04                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE04                        = 'delta'
+BP_RMS04                               = 0
+A2T04                                  = 0
+F2T04                                  = 0
+CO2T04                                 = 0
+A2SZ04                                 = 0
+
+FIX_MONOPOLE04                         = .true.
+FIX_DIPOLE04                           = .true.
+REG_NOISE_SCALE04                      = 0
+NOISEAMP_PRIOR_MEAN04                  = 1
+NOISEAMP_PRIOR_RMS04                   = 0
+GAIN_PRIOR_MEAN04                      = 1
+GAIN_PRIOR_RMS04                       = 0
+GAIN_CALIB_COMPONENT04                 = 1
+GAIN_LMIN04                            = -1
+GAIN_LMAX04                            = -1
+
+# ------------ Band 05: 110 GHz | FOSSIL_005
+FREQ_LABEL05                           = 'FOSSIL_005'
+FREQ_UNIT05                            = 'MJy/sr'
+FREQ_C05                               = 110
+MAP05_0001                             = 'nside64/maps/map_FOSSIL_0110GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS05                            = 'nside64/maps/rms_FOSSIL_0110GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB05                       = 'nside64/mask_fullsky.fits'
+
+BEAM05                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE05                        = 'delta'
+BP_RMS05                               = 0
+A2T05                                  = 0
+F2T05                                  = 0
+CO2T05                                 = 0
+A2SZ05                                 = 0
+
+FIX_MONOPOLE05                         = .true.
+FIX_DIPOLE05                           = .true.
+REG_NOISE_SCALE05                      = 0
+NOISEAMP_PRIOR_MEAN05                  = 1
+NOISEAMP_PRIOR_RMS05                   = 0
+GAIN_PRIOR_MEAN05                      = 1
+GAIN_PRIOR_RMS05                       = 0
+GAIN_CALIB_COMPONENT05                 = 1
+GAIN_LMIN05                            = -1
+GAIN_LMAX05                            = -1
+
+# ------------ Band 06: 125 GHz | FOSSIL_006
+FREQ_LABEL06                           = 'FOSSIL_006'
+FREQ_UNIT06                            = 'MJy/sr'
+FREQ_C06                               = 125
+MAP06_0001                             = 'nside64/maps/map_FOSSIL_0125GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS06                            = 'nside64/maps/rms_FOSSIL_0125GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB06                       = 'nside64/mask_fullsky.fits'
+
+BEAM06                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE06                        = 'delta'
+BP_RMS06                               = 0
+A2T06                                  = 0
+F2T06                                  = 0
+CO2T06                                 = 0
+A2SZ06                                 = 0
+
+FIX_MONOPOLE06                         = .true.
+FIX_DIPOLE06                           = .true.
+REG_NOISE_SCALE06                      = 0
+NOISEAMP_PRIOR_MEAN06                  = 1
+NOISEAMP_PRIOR_RMS06                   = 0
+GAIN_PRIOR_MEAN06                      = 1
+GAIN_PRIOR_RMS06                       = 0
+GAIN_CALIB_COMPONENT06                 = 1
+GAIN_LMIN06                            = -1
+GAIN_LMAX06                            = -1
+
+# ------------ Band 07: 140 GHz | FOSSIL_007
+FREQ_LABEL07                           = 'FOSSIL_007'
+FREQ_UNIT07                            = 'MJy/sr'
+FREQ_C07                               = 140
+MAP07_0001                             = 'nside64/maps/map_FOSSIL_0140GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS07                            = 'nside64/maps/rms_FOSSIL_0140GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB07                       = 'nside64/mask_fullsky.fits'
+
+BEAM07                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE07                        = 'delta'
+BP_RMS07                               = 0
+A2T07                                  = 0
+F2T07                                  = 0
+CO2T07                                 = 0
+A2SZ07                                 = 0
+
+FIX_MONOPOLE07                         = .true.
+FIX_DIPOLE07                           = .true.
+REG_NOISE_SCALE07                      = 0
+NOISEAMP_PRIOR_MEAN07                  = 1
+NOISEAMP_PRIOR_RMS07                   = 0
+GAIN_PRIOR_MEAN07                      = 1
+GAIN_PRIOR_RMS07                       = 0
+GAIN_CALIB_COMPONENT07                 = 1
+GAIN_LMIN07                            = -1
+GAIN_LMAX07                            = -1
+
+# ------------ Band 08: 155 GHz | FOSSIL_008
+FREQ_LABEL08                           = 'FOSSIL_008'
+FREQ_UNIT08                            = 'MJy/sr'
+FREQ_C08                               = 155
+MAP08_0001                             = 'nside64/maps/map_FOSSIL_0155GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS08                            = 'nside64/maps/rms_FOSSIL_0155GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB08                       = 'nside64/mask_fullsky.fits'
+
+BEAM08                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE08                        = 'delta'
+BP_RMS08                               = 0
+A2T08                                  = 0
+F2T08                                  = 0
+CO2T08                                 = 0
+A2SZ08                                 = 0
+
+FIX_MONOPOLE08                         = .true.
+FIX_DIPOLE08                           = .true.
+REG_NOISE_SCALE08                      = 0
+NOISEAMP_PRIOR_MEAN08                  = 1
+NOISEAMP_PRIOR_RMS08                   = 0
+GAIN_PRIOR_MEAN08                      = 1
+GAIN_PRIOR_RMS08                       = 0
+GAIN_CALIB_COMPONENT08                 = 1
+GAIN_LMIN08                            = -1
+GAIN_LMAX08                            = -1
+
+# ------------ Band 09: 170 GHz | FOSSIL_009
+FREQ_LABEL09                           = 'FOSSIL_009'
+FREQ_UNIT09                            = 'MJy/sr'
+FREQ_C09                               = 170
+MAP09_0001                             = 'nside64/maps/map_FOSSIL_0170GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS09                            = 'nside64/maps/rms_FOSSIL_0170GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB09                       = 'nside64/mask_fullsky.fits'
+
+BEAM09                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE09                        = 'delta'
+BP_RMS09                               = 0
+A2T09                                  = 0
+F2T09                                  = 0
+CO2T09                                 = 0
+A2SZ09                                 = 0
+
+FIX_MONOPOLE09                         = .true.
+FIX_DIPOLE09                           = .true.
+REG_NOISE_SCALE09                      = 0
+NOISEAMP_PRIOR_MEAN09                  = 1
+NOISEAMP_PRIOR_RMS09                   = 0
+GAIN_PRIOR_MEAN09                      = 1
+GAIN_PRIOR_RMS09                       = 0
+GAIN_CALIB_COMPONENT09                 = 1
+GAIN_LMIN09                            = -1
+GAIN_LMAX09                            = -1
+
+# ------------ Band 10: 185 GHz | FOSSIL_010
+FREQ_LABEL10                           = 'FOSSIL_010'
+FREQ_UNIT10                            = 'MJy/sr'
+FREQ_C10                               = 185
+MAP10_0001                             = 'nside64/maps/map_FOSSIL_0185GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS10                            = 'nside64/maps/rms_FOSSIL_0185GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB10                       = 'nside64/mask_fullsky.fits'
+
+BEAM10                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE10                        = 'delta'
+BP_RMS10                               = 0
+A2T10                                  = 0
+F2T10                                  = 0
+CO2T10                                 = 0
+A2SZ10                                 = 0
+
+FIX_MONOPOLE10                         = .true.
+FIX_DIPOLE10                           = .true.
+REG_NOISE_SCALE10                      = 0
+NOISEAMP_PRIOR_MEAN10                  = 1
+NOISEAMP_PRIOR_RMS10                   = 0
+GAIN_PRIOR_MEAN10                      = 1
+GAIN_PRIOR_RMS10                       = 0
+GAIN_CALIB_COMPONENT10                 = 1
+GAIN_LMIN10                            = -1
+GAIN_LMAX10                            = -1
+
+# ------------ Band 11: 200 GHz | FOSSIL_011
+FREQ_LABEL11                           = 'FOSSIL_011'
+FREQ_UNIT11                            = 'MJy/sr'
+FREQ_C11                               = 200
+MAP11_0001                             = 'nside64/maps/map_FOSSIL_0200GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS11                            = 'nside64/maps/rms_FOSSIL_0200GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB11                       = 'nside64/mask_fullsky.fits'
+
+BEAM11                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE11                        = 'delta'
+BP_RMS11                               = 0
+A2T11                                  = 0
+F2T11                                  = 0
+CO2T11                                 = 0
+A2SZ11                                 = 0
+
+FIX_MONOPOLE11                         = .true.
+FIX_DIPOLE11                           = .true.
+REG_NOISE_SCALE11                      = 0
+NOISEAMP_PRIOR_MEAN11                  = 1
+NOISEAMP_PRIOR_RMS11                   = 0
+GAIN_PRIOR_MEAN11                      = 1
+GAIN_PRIOR_RMS11                       = 0
+GAIN_CALIB_COMPONENT11                 = 1
+GAIN_LMIN11                            = -1
+GAIN_LMAX11                            = -1
+
+# ------------ Band 12: 215 GHz | FOSSIL_012
+FREQ_LABEL12                           = 'FOSSIL_012'
+FREQ_UNIT12                            = 'MJy/sr'
+FREQ_C12                               = 215
+MAP12_0001                             = 'nside64/maps/map_FOSSIL_0215GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS12                            = 'nside64/maps/rms_FOSSIL_0215GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB12                       = 'nside64/mask_fullsky.fits'
+
+BEAM12                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE12                        = 'delta'
+BP_RMS12                               = 0
+A2T12                                  = 0
+F2T12                                  = 0
+CO2T12                                 = 0
+A2SZ12                                 = 0
+
+FIX_MONOPOLE12                         = .true.
+FIX_DIPOLE12                           = .true.
+REG_NOISE_SCALE12                      = 0
+NOISEAMP_PRIOR_MEAN12                  = 1
+NOISEAMP_PRIOR_RMS12                   = 0
+GAIN_PRIOR_MEAN12                      = 1
+GAIN_PRIOR_RMS12                       = 0
+GAIN_CALIB_COMPONENT12                 = 1
+GAIN_LMIN12                            = -1
+GAIN_LMAX12                            = -1
+
+# ------------ Band 13: 230 GHz | FOSSIL_013
+FREQ_LABEL13                           = 'FOSSIL_013'
+FREQ_UNIT13                            = 'MJy/sr'
+FREQ_C13                               = 230
+MAP13_0001                             = 'nside64/maps/map_FOSSIL_0230GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS13                            = 'nside64/maps/rms_FOSSIL_0230GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB13                       = 'nside64/mask_fullsky.fits'
+
+BEAM13                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE13                        = 'delta'
+BP_RMS13                               = 0
+A2T13                                  = 0
+F2T13                                  = 0
+CO2T13                                 = 0
+A2SZ13                                 = 0
+
+FIX_MONOPOLE13                         = .true.
+FIX_DIPOLE13                           = .true.
+REG_NOISE_SCALE13                      = 0
+NOISEAMP_PRIOR_MEAN13                  = 1
+NOISEAMP_PRIOR_RMS13                   = 0
+GAIN_PRIOR_MEAN13                      = 1
+GAIN_PRIOR_RMS13                       = 0
+GAIN_CALIB_COMPONENT13                 = 1
+GAIN_LMIN13                            = -1
+GAIN_LMAX13                            = -1
+
+# ------------ Band 14: 245 GHz | FOSSIL_014
+FREQ_LABEL14                           = 'FOSSIL_014'
+FREQ_UNIT14                            = 'MJy/sr'
+FREQ_C14                               = 245
+MAP14_0001                             = 'nside64/maps/map_FOSSIL_0245GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS14                            = 'nside64/maps/rms_FOSSIL_0245GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB14                       = 'nside64/mask_fullsky.fits'
+
+BEAM14                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE14                        = 'delta'
+BP_RMS14                               = 0
+A2T14                                  = 0
+F2T14                                  = 0
+CO2T14                                 = 0
+A2SZ14                                 = 0
+
+FIX_MONOPOLE14                         = .true.
+FIX_DIPOLE14                           = .true.
+REG_NOISE_SCALE14                      = 0
+NOISEAMP_PRIOR_MEAN14                  = 1
+NOISEAMP_PRIOR_RMS14                   = 0
+GAIN_PRIOR_MEAN14                      = 1
+GAIN_PRIOR_RMS14                       = 0
+GAIN_CALIB_COMPONENT14                 = 1
+GAIN_LMIN14                            = -1
+GAIN_LMAX14                            = -1
+
+# ------------ Band 15: 260 GHz | FOSSIL_015
+FREQ_LABEL15                           = 'FOSSIL_015'
+FREQ_UNIT15                            = 'MJy/sr'
+FREQ_C15                               = 260
+MAP15_0001                             = 'nside64/maps/map_FOSSIL_0260GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS15                            = 'nside64/maps/rms_FOSSIL_0260GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB15                       = 'nside64/mask_fullsky.fits'
+
+BEAM15                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE15                        = 'delta'
+BP_RMS15                               = 0
+A2T15                                  = 0
+F2T15                                  = 0
+CO2T15                                 = 0
+A2SZ15                                 = 0
+
+FIX_MONOPOLE15                         = .true.
+FIX_DIPOLE15                           = .true.
+REG_NOISE_SCALE15                      = 0
+NOISEAMP_PRIOR_MEAN15                  = 1
+NOISEAMP_PRIOR_RMS15                   = 0
+GAIN_PRIOR_MEAN15                      = 1
+GAIN_PRIOR_RMS15                       = 0
+GAIN_CALIB_COMPONENT15                 = 1
+GAIN_LMIN15                            = -1
+GAIN_LMAX15                            = -1
+
+# ------------ Band 16: 305 GHz | FOSSIL_018
+FREQ_LABEL16                           = 'FOSSIL_018'
+FREQ_UNIT16                            = 'MJy/sr'
+FREQ_C16                               = 305
+MAP16_0001                             = 'nside64/maps/map_FOSSIL_0305GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS16                            = 'nside64/maps/rms_FOSSIL_0305GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB16                       = 'nside64/mask_fullsky.fits'
+
+BEAM16                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE16                        = 'delta'
+BP_RMS16                               = 0
+A2T16                                  = 0
+F2T16                                  = 0
+CO2T16                                 = 0
+A2SZ16                                 = 0
+
+FIX_MONOPOLE16                         = .true.
+FIX_DIPOLE16                           = .true.
+REG_NOISE_SCALE16                      = 0
+NOISEAMP_PRIOR_MEAN16                  = 1
+NOISEAMP_PRIOR_RMS16                   = 0
+GAIN_PRIOR_MEAN16                      = 1
+GAIN_PRIOR_RMS16                       = 0
+GAIN_CALIB_COMPONENT16                 = 1
+GAIN_LMIN16                            = -1
+GAIN_LMAX16                            = -1
+
+# ------------ Band 17: 320 GHz | FOSSIL_019
+FREQ_LABEL17                           = 'FOSSIL_019'
+FREQ_UNIT17                            = 'MJy/sr'
+FREQ_C17                               = 320
+MAP17_0001                             = 'nside64/maps/map_FOSSIL_0320GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS17                            = 'nside64/maps/rms_FOSSIL_0320GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB17                       = 'nside64/mask_fullsky.fits'
+
+BEAM17                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE17                        = 'delta'
+BP_RMS17                               = 0
+A2T17                                  = 0
+F2T17                                  = 0
+CO2T17                                 = 0
+A2SZ17                                 = 0
+
+FIX_MONOPOLE17                         = .true.
+FIX_DIPOLE17                           = .true.
+REG_NOISE_SCALE17                      = 0
+NOISEAMP_PRIOR_MEAN17                  = 1
+NOISEAMP_PRIOR_RMS17                   = 0
+GAIN_PRIOR_MEAN17                      = 1
+GAIN_PRIOR_RMS17                       = 0
+GAIN_CALIB_COMPONENT17                 = 1
+GAIN_LMIN17                            = -1
+GAIN_LMAX17                            = -1
+
+# ------------ Band 18: 335 GHz | FOSSIL_020
+FREQ_LABEL18                           = 'FOSSIL_020'
+FREQ_UNIT18                            = 'MJy/sr'
+FREQ_C18                               = 335
+MAP18_0001                             = 'nside64/maps/map_FOSSIL_0335GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS18                            = 'nside64/maps/rms_FOSSIL_0335GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB18                       = 'nside64/mask_fullsky.fits'
+
+BEAM18                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE18                        = 'delta'
+BP_RMS18                               = 0
+A2T18                                  = 0
+F2T18                                  = 0
+CO2T18                                 = 0
+A2SZ18                                 = 0
+
+FIX_MONOPOLE18                         = .true.
+FIX_DIPOLE18                           = .true.
+REG_NOISE_SCALE18                      = 0
+NOISEAMP_PRIOR_MEAN18                  = 1
+NOISEAMP_PRIOR_RMS18                   = 0
+GAIN_PRIOR_MEAN18                      = 1
+GAIN_PRIOR_RMS18                       = 0
+GAIN_CALIB_COMPONENT18                 = 1
+GAIN_LMIN18                            = -1
+GAIN_LMAX18                            = -1
+
+# ------------ Band 19: 350 GHz | FOSSIL_021
+FREQ_LABEL19                           = 'FOSSIL_021'
+FREQ_UNIT19                            = 'MJy/sr'
+FREQ_C19                               = 350
+MAP19_0001                             = 'nside64/maps/map_FOSSIL_0350GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS19                            = 'nside64/maps/rms_FOSSIL_0350GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB19                       = 'nside64/mask_fullsky.fits'
+
+BEAM19                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE19                        = 'delta'
+BP_RMS19                               = 0
+A2T19                                  = 0
+F2T19                                  = 0
+CO2T19                                 = 0
+A2SZ19                                 = 0
+
+FIX_MONOPOLE19                         = .true.
+FIX_DIPOLE19                           = .true.
+REG_NOISE_SCALE19                      = 0
+NOISEAMP_PRIOR_MEAN19                  = 1
+NOISEAMP_PRIOR_RMS19                   = 0
+GAIN_PRIOR_MEAN19                      = 1
+GAIN_PRIOR_RMS19                       = 0
+GAIN_CALIB_COMPONENT19                 = 1
+GAIN_LMIN19                            = -1
+GAIN_LMAX19                            = -1
+
+# ------------ Band 20: 365 GHz | FOSSIL_022
+FREQ_LABEL20                           = 'FOSSIL_022'
+FREQ_UNIT20                            = 'MJy/sr'
+FREQ_C20                               = 365
+MAP20_0001                             = 'nside64/maps/map_FOSSIL_0365GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS20                            = 'nside64/maps/rms_FOSSIL_0365GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB20                       = 'nside64/mask_fullsky.fits'
+
+BEAM20                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE20                        = 'delta'
+BP_RMS20                               = 0
+A2T20                                  = 0
+F2T20                                  = 0
+CO2T20                                 = 0
+A2SZ20                                 = 0
+
+FIX_MONOPOLE20                         = .true.
+FIX_DIPOLE20                           = .true.
+REG_NOISE_SCALE20                      = 0
+NOISEAMP_PRIOR_MEAN20                  = 1
+NOISEAMP_PRIOR_RMS20                   = 0
+GAIN_PRIOR_MEAN20                      = 1
+GAIN_PRIOR_RMS20                       = 0
+GAIN_CALIB_COMPONENT20                 = 1
+GAIN_LMIN20                            = -1
+GAIN_LMAX20                            = -1
+
+# ------------ Band 21: 380 GHz | FOSSIL_023
+FREQ_LABEL21                           = 'FOSSIL_023'
+FREQ_UNIT21                            = 'MJy/sr'
+FREQ_C21                               = 380
+MAP21_0001                             = 'nside64/maps/map_FOSSIL_0380GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS21                            = 'nside64/maps/rms_FOSSIL_0380GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB21                       = 'nside64/mask_fullsky.fits'
+
+BEAM21                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE21                        = 'delta'
+BP_RMS21                               = 0
+A2T21                                  = 0
+F2T21                                  = 0
+CO2T21                                 = 0
+A2SZ21                                 = 0
+
+FIX_MONOPOLE21                         = .true.
+FIX_DIPOLE21                           = .true.
+REG_NOISE_SCALE21                      = 0
+NOISEAMP_PRIOR_MEAN21                  = 1
+NOISEAMP_PRIOR_RMS21                   = 0
+GAIN_PRIOR_MEAN21                      = 1
+GAIN_PRIOR_RMS21                       = 0
+GAIN_CALIB_COMPONENT21                 = 1
+GAIN_LMIN21                            = -1
+GAIN_LMAX21                            = -1
+
+# ------------ Band 22: 395 GHz | FOSSIL_024
+FREQ_LABEL22                           = 'FOSSIL_024'
+FREQ_UNIT22                            = 'MJy/sr'
+FREQ_C22                               = 395
+MAP22_0001                             = 'nside64/maps/map_FOSSIL_0395GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS22                            = 'nside64/maps/rms_FOSSIL_0395GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB22                       = 'nside64/mask_fullsky.fits'
+
+BEAM22                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE22                        = 'delta'
+BP_RMS22                               = 0
+A2T22                                  = 0
+F2T22                                  = 0
+CO2T22                                 = 0
+A2SZ22                                 = 0
+
+FIX_MONOPOLE22                         = .true.
+FIX_DIPOLE22                           = .true.
+REG_NOISE_SCALE22                      = 0
+NOISEAMP_PRIOR_MEAN22                  = 1
+NOISEAMP_PRIOR_RMS22                   = 0
+GAIN_PRIOR_MEAN22                      = 1
+GAIN_PRIOR_RMS22                       = 0
+GAIN_CALIB_COMPONENT22                 = 1
+GAIN_LMIN22                            = -1
+GAIN_LMAX22                            = -1
+
+# ------------ Band 23: 425 GHz | FOSSIL_026
+FREQ_LABEL23                           = 'FOSSIL_026'
+FREQ_UNIT23                            = 'MJy/sr'
+FREQ_C23                               = 425
+MAP23_0001                             = 'nside64/maps/map_FOSSIL_0425GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS23                            = 'nside64/maps/rms_FOSSIL_0425GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB23                       = 'nside64/mask_fullsky.fits'
+
+BEAM23                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE23                        = 'delta'
+BP_RMS23                               = 0
+A2T23                                  = 0
+F2T23                                  = 0
+CO2T23                                 = 0
+A2SZ23                                 = 0
+
+FIX_MONOPOLE23                         = .true.
+FIX_DIPOLE23                           = .true.
+REG_NOISE_SCALE23                      = 0
+NOISEAMP_PRIOR_MEAN23                  = 1
+NOISEAMP_PRIOR_RMS23                   = 0
+GAIN_PRIOR_MEAN23                      = 1
+GAIN_PRIOR_RMS23                       = 0
+GAIN_CALIB_COMPONENT23                 = 1
+GAIN_LMIN23                            = -1
+GAIN_LMAX23                            = -1
+
+# ------------ Band 24: 440 GHz | FOSSIL_027
+FREQ_LABEL24                           = 'FOSSIL_027'
+FREQ_UNIT24                            = 'MJy/sr'
+FREQ_C24                               = 440
+MAP24_0001                             = 'nside64/maps/map_FOSSIL_0440GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS24                            = 'nside64/maps/rms_FOSSIL_0440GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB24                       = 'nside64/mask_fullsky.fits'
+
+BEAM24                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE24                        = 'delta'
+BP_RMS24                               = 0
+A2T24                                  = 0
+F2T24                                  = 0
+CO2T24                                 = 0
+A2SZ24                                 = 0
+
+FIX_MONOPOLE24                         = .true.
+FIX_DIPOLE24                           = .true.
+REG_NOISE_SCALE24                      = 0
+NOISEAMP_PRIOR_MEAN24                  = 1
+NOISEAMP_PRIOR_RMS24                   = 0
+GAIN_PRIOR_MEAN24                      = 1
+GAIN_PRIOR_RMS24                       = 0
+GAIN_CALIB_COMPONENT24                 = 1
+GAIN_LMIN24                            = -1
+GAIN_LMAX24                            = -1
+
+# ------------ Band 25: 455 GHz | FOSSIL_028
+FREQ_LABEL25                           = 'FOSSIL_028'
+FREQ_UNIT25                            = 'MJy/sr'
+FREQ_C25                               = 455
+MAP25_0001                             = 'nside64/maps/map_FOSSIL_0455GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS25                            = 'nside64/maps/rms_FOSSIL_0455GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB25                       = 'nside64/mask_fullsky.fits'
+
+BEAM25                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE25                        = 'delta'
+BP_RMS25                               = 0
+A2T25                                  = 0
+F2T25                                  = 0
+CO2T25                                 = 0
+A2SZ25                                 = 0
+
+FIX_MONOPOLE25                         = .true.
+FIX_DIPOLE25                           = .true.
+REG_NOISE_SCALE25                      = 0
+NOISEAMP_PRIOR_MEAN25                  = 1
+NOISEAMP_PRIOR_RMS25                   = 0
+GAIN_PRIOR_MEAN25                      = 1
+GAIN_PRIOR_RMS25                       = 0
+GAIN_CALIB_COMPONENT25                 = 1
+GAIN_LMIN25                            = -1
+GAIN_LMAX25                            = -1
+
+# ------------ Band 26: 515 GHz | FOSSIL_032
+FREQ_LABEL26                           = 'FOSSIL_032'
+FREQ_UNIT26                            = 'MJy/sr'
+FREQ_C26                               = 515
+MAP26_0001                             = 'nside64/maps/map_FOSSIL_0515GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS26                            = 'nside64/maps/rms_FOSSIL_0515GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB26                       = 'nside64/mask_fullsky.fits'
+
+BEAM26                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE26                        = 'delta'
+BP_RMS26                               = 0
+A2T26                                  = 0
+F2T26                                  = 0
+CO2T26                                 = 0
+A2SZ26                                 = 0
+
+FIX_MONOPOLE26                         = .true.
+FIX_DIPOLE26                           = .true.
+REG_NOISE_SCALE26                      = 0
+NOISEAMP_PRIOR_MEAN26                  = 1
+NOISEAMP_PRIOR_RMS26                   = 0
+GAIN_PRIOR_MEAN26                      = 1
+GAIN_PRIOR_RMS26                       = 0
+GAIN_CALIB_COMPONENT26                 = 1
+GAIN_LMIN26                            = -1
+GAIN_LMAX26                            = -1
+
+# ------------ Band 27: 530 GHz | FOSSIL_033
+FREQ_LABEL27                           = 'FOSSIL_033'
+FREQ_UNIT27                            = 'MJy/sr'
+FREQ_C27                               = 530
+MAP27_0001                             = 'nside64/maps/map_FOSSIL_0530GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS27                            = 'nside64/maps/rms_FOSSIL_0530GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB27                       = 'nside64/mask_fullsky.fits'
+
+BEAM27                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE27                        = 'delta'
+BP_RMS27                               = 0
+A2T27                                  = 0
+F2T27                                  = 0
+CO2T27                                 = 0
+A2SZ27                                 = 0
+
+FIX_MONOPOLE27                         = .true.
+FIX_DIPOLE27                           = .true.
+REG_NOISE_SCALE27                      = 0
+NOISEAMP_PRIOR_MEAN27                  = 1
+NOISEAMP_PRIOR_RMS27                   = 0
+GAIN_PRIOR_MEAN27                      = 1
+GAIN_PRIOR_RMS27                       = 0
+GAIN_CALIB_COMPONENT27                 = 1
+GAIN_LMIN27                            = -1
+GAIN_LMAX27                            = -1
+
+# ------------ Band 28: 545 GHz | FOSSIL_034
+FREQ_LABEL28                           = 'FOSSIL_034'
+FREQ_UNIT28                            = 'MJy/sr'
+FREQ_C28                               = 545
+MAP28_0001                             = 'nside64/maps/map_FOSSIL_0545GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS28                            = 'nside64/maps/rms_FOSSIL_0545GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB28                       = 'nside64/mask_fullsky.fits'
+
+BEAM28                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE28                        = 'delta'
+BP_RMS28                               = 0
+A2T28                                  = 0
+F2T28                                  = 0
+CO2T28                                 = 0
+A2SZ28                                 = 0
+
+FIX_MONOPOLE28                         = .true.
+FIX_DIPOLE28                           = .true.
+REG_NOISE_SCALE28                      = 0
+NOISEAMP_PRIOR_MEAN28                  = 1
+NOISEAMP_PRIOR_RMS28                   = 0
+GAIN_PRIOR_MEAN28                      = 1
+GAIN_PRIOR_RMS28                       = 0
+GAIN_CALIB_COMPONENT28                 = 1
+GAIN_LMIN28                            = -1
+GAIN_LMAX28                            = -1
+
+# ------------ Band 29: 575 GHz | FOSSIL_036
+FREQ_LABEL29                           = 'FOSSIL_036'
+FREQ_UNIT29                            = 'MJy/sr'
+FREQ_C29                               = 575
+MAP29_0001                             = 'nside64/maps/map_FOSSIL_0575GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS29                            = 'nside64/maps/rms_FOSSIL_0575GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB29                       = 'nside64/mask_fullsky.fits'
+
+BEAM29                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE29                        = 'delta'
+BP_RMS29                               = 0
+A2T29                                  = 0
+F2T29                                  = 0
+CO2T29                                 = 0
+A2SZ29                                 = 0
+
+FIX_MONOPOLE29                         = .true.
+FIX_DIPOLE29                           = .true.
+REG_NOISE_SCALE29                      = 0
+NOISEAMP_PRIOR_MEAN29                  = 1
+NOISEAMP_PRIOR_RMS29                   = 0
+GAIN_PRIOR_MEAN29                      = 1
+GAIN_PRIOR_RMS29                       = 0
+GAIN_CALIB_COMPONENT29                 = 1
+GAIN_LMIN29                            = -1
+GAIN_LMAX29                            = -1
+
+# ------------ Band 30: 590 GHz | FOSSIL_037
+FREQ_LABEL30                           = 'FOSSIL_037'
+FREQ_UNIT30                            = 'MJy/sr'
+FREQ_C30                               = 590
+MAP30_0001                             = 'nside64/maps/map_FOSSIL_0590GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS30                            = 'nside64/maps/rms_FOSSIL_0590GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB30                       = 'nside64/mask_fullsky.fits'
+
+BEAM30                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE30                        = 'delta'
+BP_RMS30                               = 0
+A2T30                                  = 0
+F2T30                                  = 0
+CO2T30                                 = 0
+A2SZ30                                 = 0
+
+FIX_MONOPOLE30                         = .true.
+FIX_DIPOLE30                           = .true.
+REG_NOISE_SCALE30                      = 0
+NOISEAMP_PRIOR_MEAN30                  = 1
+NOISEAMP_PRIOR_RMS30                   = 0
+GAIN_PRIOR_MEAN30                      = 1
+GAIN_PRIOR_RMS30                       = 0
+GAIN_CALIB_COMPONENT30                 = 1
+GAIN_LMIN30                            = -1
+GAIN_LMAX30                            = -1
+
+# ------------ Band 31: 665 GHz | FOSSIL_042
+FREQ_LABEL31                           = 'FOSSIL_042'
+FREQ_UNIT31                            = 'MJy/sr'
+FREQ_C31                               = 665
+MAP31_0001                             = 'nside64/maps/map_FOSSIL_0665GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS31                            = 'nside64/maps/rms_FOSSIL_0665GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB31                       = 'nside64/mask_fullsky.fits'
+
+BEAM31                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE31                        = 'delta'
+BP_RMS31                               = 0
+A2T31                                  = 0
+F2T31                                  = 0
+CO2T31                                 = 0
+A2SZ31                                 = 0
+
+FIX_MONOPOLE31                         = .true.
+FIX_DIPOLE31                           = .true.
+REG_NOISE_SCALE31                      = 0
+NOISEAMP_PRIOR_MEAN31                  = 1
+NOISEAMP_PRIOR_RMS31                   = 0
+GAIN_PRIOR_MEAN31                      = 1
+GAIN_PRIOR_RMS31                       = 0
+GAIN_CALIB_COMPONENT31                 = 1
+GAIN_LMIN31                            = -1
+GAIN_LMAX31                            = -1
+
+# ------------ Band 32: 680 GHz | FOSSIL_043
+FREQ_LABEL32                           = 'FOSSIL_043'
+FREQ_UNIT32                            = 'MJy/sr'
+FREQ_C32                               = 680
+MAP32_0001                             = 'nside64/maps/map_FOSSIL_0680GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS32                            = 'nside64/maps/rms_FOSSIL_0680GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB32                       = 'nside64/mask_fullsky.fits'
+
+BEAM32                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE32                        = 'delta'
+BP_RMS32                               = 0
+A2T32                                  = 0
+F2T32                                  = 0
+CO2T32                                 = 0
+A2SZ32                                 = 0
+
+FIX_MONOPOLE32                         = .true.
+FIX_DIPOLE32                           = .true.
+REG_NOISE_SCALE32                      = 0
+NOISEAMP_PRIOR_MEAN32                  = 1
+NOISEAMP_PRIOR_RMS32                   = 0
+GAIN_PRIOR_MEAN32                      = 1
+GAIN_PRIOR_RMS32                       = 0
+GAIN_CALIB_COMPONENT32                 = 1
+GAIN_LMIN32                            = -1
+GAIN_LMAX32                            = -1
+
+# ------------ Band 33: 695 GHz | FOSSIL_044
+FREQ_LABEL33                           = 'FOSSIL_044'
+FREQ_UNIT33                            = 'MJy/sr'
+FREQ_C33                               = 695
+MAP33_0001                             = 'nside64/maps/map_FOSSIL_0695GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS33                            = 'nside64/maps/rms_FOSSIL_0695GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB33                       = 'nside64/mask_fullsky.fits'
+
+BEAM33                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE33                        = 'delta'
+BP_RMS33                               = 0
+A2T33                                  = 0
+F2T33                                  = 0
+CO2T33                                 = 0
+A2SZ33                                 = 0
+
+FIX_MONOPOLE33                         = .true.
+FIX_DIPOLE33                           = .true.
+REG_NOISE_SCALE33                      = 0
+NOISEAMP_PRIOR_MEAN33                  = 1
+NOISEAMP_PRIOR_RMS33                   = 0
+GAIN_PRIOR_MEAN33                      = 1
+GAIN_PRIOR_RMS33                       = 0
+GAIN_CALIB_COMPONENT33                 = 1
+GAIN_LMIN33                            = -1
+GAIN_LMAX33                            = -1
+
+# ------------ Band 34: 710 GHz | FOSSIL_045
+FREQ_LABEL34                           = 'FOSSIL_045'
+FREQ_UNIT34                            = 'MJy/sr'
+FREQ_C34                               = 710
+MAP34_0001                             = 'nside64/maps/map_FOSSIL_0710GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS34                            = 'nside64/maps/rms_FOSSIL_0710GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB34                       = 'nside64/mask_fullsky.fits'
+
+BEAM34                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE34                        = 'delta'
+BP_RMS34                               = 0
+A2T34                                  = 0
+F2T34                                  = 0
+CO2T34                                 = 0
+A2SZ34                                 = 0
+
+FIX_MONOPOLE34                         = .true.
+FIX_DIPOLE34                           = .true.
+REG_NOISE_SCALE34                      = 0
+NOISEAMP_PRIOR_MEAN34                  = 1
+NOISEAMP_PRIOR_RMS34                   = 0
+GAIN_PRIOR_MEAN34                      = 1
+GAIN_PRIOR_RMS34                       = 0
+GAIN_CALIB_COMPONENT34                 = 1
+GAIN_LMIN34                            = -1
+GAIN_LMAX34                            = -1
+
+# ------------ Band 35: 725 GHz | FOSSIL_046
+FREQ_LABEL35                           = 'FOSSIL_046'
+FREQ_UNIT35                            = 'MJy/sr'
+FREQ_C35                               = 725
+MAP35_0001                             = 'nside64/maps/map_FOSSIL_0725GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS35                            = 'nside64/maps/rms_FOSSIL_0725GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB35                       = 'nside64/mask_fullsky.fits'
+
+BEAM35                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE35                        = 'delta'
+BP_RMS35                               = 0
+A2T35                                  = 0
+F2T35                                  = 0
+CO2T35                                 = 0
+A2SZ35                                 = 0
+
+FIX_MONOPOLE35                         = .true.
+FIX_DIPOLE35                           = .true.
+REG_NOISE_SCALE35                      = 0
+NOISEAMP_PRIOR_MEAN35                  = 1
+NOISEAMP_PRIOR_RMS35                   = 0
+GAIN_PRIOR_MEAN35                      = 1
+GAIN_PRIOR_RMS35                       = 0
+GAIN_CALIB_COMPONENT35                 = 1
+GAIN_LMIN35                            = -1
+GAIN_LMAX35                            = -1
+
+# ------------ Band 36: 845 GHz | FOSSIL_054
+FREQ_LABEL36                           = 'FOSSIL_054'
+FREQ_UNIT36                            = 'MJy/sr'
+FREQ_C36                               = 845
+MAP36_0001                             = 'nside64/maps/map_FOSSIL_0845GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS36                            = 'nside64/maps/rms_FOSSIL_0845GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB36                       = 'nside64/mask_fullsky.fits'
+
+BEAM36                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE36                        = 'delta'
+BP_RMS36                               = 0
+A2T36                                  = 0
+F2T36                                  = 0
+CO2T36                                 = 0
+A2SZ36                                 = 0
+
+FIX_MONOPOLE36                         = .true.
+FIX_DIPOLE36                           = .true.
+REG_NOISE_SCALE36                      = 0
+NOISEAMP_PRIOR_MEAN36                  = 1
+NOISEAMP_PRIOR_RMS36                   = 0
+GAIN_PRIOR_MEAN36                      = 1
+GAIN_PRIOR_RMS36                       = 0
+GAIN_CALIB_COMPONENT36                 = 1
+GAIN_LMIN36                            = -1
+GAIN_LMAX36                            = -1
+
+# ------------ Band 37: 860 GHz | FOSSIL_055
+FREQ_LABEL37                           = 'FOSSIL_055'
+FREQ_UNIT37                            = 'MJy/sr'
+FREQ_C37                               = 860
+MAP37_0001                             = 'nside64/maps/map_FOSSIL_0860GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS37                            = 'nside64/maps/rms_FOSSIL_0860GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB37                       = 'nside64/mask_fullsky.fits'
+
+BEAM37                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE37                        = 'delta'
+BP_RMS37                               = 0
+A2T37                                  = 0
+F2T37                                  = 0
+CO2T37                                 = 0
+A2SZ37                                 = 0
+
+FIX_MONOPOLE37                         = .true.
+FIX_DIPOLE37                           = .true.
+REG_NOISE_SCALE37                      = 0
+NOISEAMP_PRIOR_MEAN37                  = 1
+NOISEAMP_PRIOR_RMS37                   = 0
+GAIN_PRIOR_MEAN37                      = 1
+GAIN_PRIOR_RMS37                       = 0
+GAIN_CALIB_COMPONENT37                 = 1
+GAIN_LMIN37                            = -1
+GAIN_LMAX37                            = -1
+
+# ------------ Band 38: 875 GHz | FOSSIL_056
+FREQ_LABEL38                           = 'FOSSIL_056'
+FREQ_UNIT38                            = 'MJy/sr'
+FREQ_C38                               = 875
+MAP38_0001                             = 'nside64/maps/map_FOSSIL_0875GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS38                            = 'nside64/maps/rms_FOSSIL_0875GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB38                       = 'nside64/mask_fullsky.fits'
+
+BEAM38                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE38                        = 'delta'
+BP_RMS38                               = 0
+A2T38                                  = 0
+F2T38                                  = 0
+CO2T38                                 = 0
+A2SZ38                                 = 0
+
+FIX_MONOPOLE38                         = .true.
+FIX_DIPOLE38                           = .true.
+REG_NOISE_SCALE38                      = 0
+NOISEAMP_PRIOR_MEAN38                  = 1
+NOISEAMP_PRIOR_RMS38                   = 0
+GAIN_PRIOR_MEAN38                      = 1
+GAIN_PRIOR_RMS38                       = 0
+GAIN_CALIB_COMPONENT38                 = 1
+GAIN_LMIN38                            = -1
+GAIN_LMAX38                            = -1
+
+# ------------ Band 39: 890 GHz | FOSSIL_057
+FREQ_LABEL39                           = 'FOSSIL_057'
+FREQ_UNIT39                            = 'MJy/sr'
+FREQ_C39                               = 890
+MAP39_0001                             = 'nside64/maps/map_FOSSIL_0890GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS39                            = 'nside64/maps/rms_FOSSIL_0890GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB39                       = 'nside64/mask_fullsky.fits'
+
+BEAM39                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE39                        = 'delta'
+BP_RMS39                               = 0
+A2T39                                  = 0
+F2T39                                  = 0
+CO2T39                                 = 0
+A2SZ39                                 = 0
+
+FIX_MONOPOLE39                         = .true.
+FIX_DIPOLE39                           = .true.
+REG_NOISE_SCALE39                      = 0
+NOISEAMP_PRIOR_MEAN39                  = 1
+NOISEAMP_PRIOR_RMS39                   = 0
+GAIN_PRIOR_MEAN39                      = 1
+GAIN_PRIOR_RMS39                       = 0
+GAIN_CALIB_COMPONENT39                 = 1
+GAIN_LMIN39                            = -1
+GAIN_LMAX39                            = -1
+
+# ------------ Band 40: 905 GHz | FOSSIL_058
+FREQ_LABEL40                           = 'FOSSIL_058'
+FREQ_UNIT40                            = 'MJy/sr'
+FREQ_C40                               = 905
+MAP40_0001                             = 'nside64/maps/map_FOSSIL_0905GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS40                            = 'nside64/maps/rms_FOSSIL_0905GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB40                       = 'nside64/mask_fullsky.fits'
+
+BEAM40                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE40                        = 'delta'
+BP_RMS40                               = 0
+A2T40                                  = 0
+F2T40                                  = 0
+CO2T40                                 = 0
+A2SZ40                                 = 0
+
+FIX_MONOPOLE40                         = .true.
+FIX_DIPOLE40                           = .true.
+REG_NOISE_SCALE40                      = 0
+NOISEAMP_PRIOR_MEAN40                  = 1
+NOISEAMP_PRIOR_RMS40                   = 0
+GAIN_PRIOR_MEAN40                      = 1
+GAIN_PRIOR_RMS40                       = 0
+GAIN_CALIB_COMPONENT40                 = 1
+GAIN_LMIN40                            = -1
+GAIN_LMAX40                            = -1
+
+# ------------ Band 41: 1055 GHz | FOSSIL_068
+FREQ_LABEL41                           = 'FOSSIL_068'
+FREQ_UNIT41                            = 'MJy/sr'
+FREQ_C41                               = 1055
+MAP41_0001                             = 'nside64/maps/map_FOSSIL_1055GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS41                            = 'nside64/maps/rms_FOSSIL_1055GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB41                       = 'nside64/mask_fullsky.fits'
+
+BEAM41                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE41                        = 'delta'
+BP_RMS41                               = 0
+A2T41                                  = 0
+F2T41                                  = 0
+CO2T41                                 = 0
+A2SZ41                                 = 0
+
+FIX_MONOPOLE41                         = .true.
+FIX_DIPOLE41                           = .true.
+REG_NOISE_SCALE41                      = 0
+NOISEAMP_PRIOR_MEAN41                  = 1
+NOISEAMP_PRIOR_RMS41                   = 0
+GAIN_PRIOR_MEAN41                      = 1
+GAIN_PRIOR_RMS41                       = 0
+GAIN_CALIB_COMPONENT41                 = 1
+GAIN_LMIN41                            = -1
+GAIN_LMAX41                            = -1
+
+# ------------ Band 42: 1070 GHz | FOSSIL_069
+FREQ_LABEL42                           = 'FOSSIL_069'
+FREQ_UNIT42                            = 'MJy/sr'
+FREQ_C42                               = 1070
+MAP42_0001                             = 'nside64/maps/map_FOSSIL_1070GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS42                            = 'nside64/maps/rms_FOSSIL_1070GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB42                       = 'nside64/mask_fullsky.fits'
+
+BEAM42                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE42                        = 'delta'
+BP_RMS42                               = 0
+A2T42                                  = 0
+F2T42                                  = 0
+CO2T42                                 = 0
+A2SZ42                                 = 0
+
+FIX_MONOPOLE42                         = .true.
+FIX_DIPOLE42                           = .true.
+REG_NOISE_SCALE42                      = 0
+NOISEAMP_PRIOR_MEAN42                  = 1
+NOISEAMP_PRIOR_RMS42                   = 0
+GAIN_PRIOR_MEAN42                      = 1
+GAIN_PRIOR_RMS42                       = 0
+GAIN_CALIB_COMPONENT42                 = 1
+GAIN_LMIN42                            = -1
+GAIN_LMAX42                            = -1
+
+# ------------ Band 43: 1085 GHz | FOSSIL_070
+FREQ_LABEL43                           = 'FOSSIL_070'
+FREQ_UNIT43                            = 'MJy/sr'
+FREQ_C43                               = 1085
+MAP43_0001                             = 'nside64/maps/map_FOSSIL_1085GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS43                            = 'nside64/maps/rms_FOSSIL_1085GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB43                       = 'nside64/mask_fullsky.fits'
+
+BEAM43                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE43                        = 'delta'
+BP_RMS43                               = 0
+A2T43                                  = 0
+F2T43                                  = 0
+CO2T43                                 = 0
+A2SZ43                                 = 0
+
+FIX_MONOPOLE43                         = .true.
+FIX_DIPOLE43                           = .true.
+REG_NOISE_SCALE43                      = 0
+NOISEAMP_PRIOR_MEAN43                  = 1
+NOISEAMP_PRIOR_RMS43                   = 0
+GAIN_PRIOR_MEAN43                      = 1
+GAIN_PRIOR_RMS43                       = 0
+GAIN_CALIB_COMPONENT43                 = 1
+GAIN_LMIN43                            = -1
+GAIN_LMAX43                            = -1
+
+# ------------ Band 44: 1100 GHz | FOSSIL_071
+FREQ_LABEL44                           = 'FOSSIL_071'
+FREQ_UNIT44                            = 'MJy/sr'
+FREQ_C44                               = 1100
+MAP44_0001                             = 'nside64/maps/map_FOSSIL_1100GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS44                            = 'nside64/maps/rms_FOSSIL_1100GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB44                       = 'nside64/mask_fullsky.fits'
+
+BEAM44                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE44                        = 'delta'
+BP_RMS44                               = 0
+A2T44                                  = 0
+F2T44                                  = 0
+CO2T44                                 = 0
+A2SZ44                                 = 0
+
+FIX_MONOPOLE44                         = .true.
+FIX_DIPOLE44                           = .true.
+REG_NOISE_SCALE44                      = 0
+NOISEAMP_PRIOR_MEAN44                  = 1
+NOISEAMP_PRIOR_RMS44                   = 0
+GAIN_PRIOR_MEAN44                      = 1
+GAIN_PRIOR_RMS44                       = 0
+GAIN_CALIB_COMPONENT44                 = 1
+GAIN_LMIN44                            = -1
+GAIN_LMAX44                            = -1
+
+# ------------ Band 45: 1115 GHz | FOSSIL_072
+FREQ_LABEL45                           = 'FOSSIL_072'
+FREQ_UNIT45                            = 'MJy/sr'
+FREQ_C45                               = 1115
+MAP45_0001                             = 'nside64/maps/map_FOSSIL_1115GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS45                            = 'nside64/maps/rms_FOSSIL_1115GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB45                       = 'nside64/mask_fullsky.fits'
+
+BEAM45                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE45                        = 'delta'
+BP_RMS45                               = 0
+A2T45                                  = 0
+F2T45                                  = 0
+CO2T45                                 = 0
+A2SZ45                                 = 0
+
+FIX_MONOPOLE45                         = .true.
+FIX_DIPOLE45                           = .true.
+REG_NOISE_SCALE45                      = 0
+NOISEAMP_PRIOR_MEAN45                  = 1
+NOISEAMP_PRIOR_RMS45                   = 0
+GAIN_PRIOR_MEAN45                      = 1
+GAIN_PRIOR_RMS45                       = 0
+GAIN_CALIB_COMPONENT45                 = 1
+GAIN_LMIN45                            = -1
+GAIN_LMAX45                            = -1
+
+# ------------ Band 46: 1295 GHz | FOSSIL_084
+FREQ_LABEL46                           = 'FOSSIL_084'
+FREQ_UNIT46                            = 'MJy/sr'
+FREQ_C46                               = 1295
+MAP46_0001                             = 'nside64/maps/map_FOSSIL_1295GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS46                            = 'nside64/maps/rms_FOSSIL_1295GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB46                       = 'nside64/mask_fullsky.fits'
+
+BEAM46                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE46                        = 'delta'
+BP_RMS46                               = 0
+A2T46                                  = 0
+F2T46                                  = 0
+CO2T46                                 = 0
+A2SZ46                                 = 0
+
+FIX_MONOPOLE46                         = .true.
+FIX_DIPOLE46                           = .true.
+REG_NOISE_SCALE46                      = 0
+NOISEAMP_PRIOR_MEAN46                  = 1
+NOISEAMP_PRIOR_RMS46                   = 0
+GAIN_PRIOR_MEAN46                      = 1
+GAIN_PRIOR_RMS46                       = 0
+GAIN_CALIB_COMPONENT46                 = 1
+GAIN_LMIN46                            = -1
+GAIN_LMAX46                            = -1
+
+# ------------ Band 47: 1310 GHz | FOSSIL_085
+FREQ_LABEL47                           = 'FOSSIL_085'
+FREQ_UNIT47                            = 'MJy/sr'
+FREQ_C47                               = 1310
+MAP47_0001                             = 'nside64/maps/map_FOSSIL_1310GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS47                            = 'nside64/maps/rms_FOSSIL_1310GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB47                       = 'nside64/mask_fullsky.fits'
+
+BEAM47                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE47                        = 'delta'
+BP_RMS47                               = 0
+A2T47                                  = 0
+F2T47                                  = 0
+CO2T47                                 = 0
+A2SZ47                                 = 0
+
+FIX_MONOPOLE47                         = .true.
+FIX_DIPOLE47                           = .true.
+REG_NOISE_SCALE47                      = 0
+NOISEAMP_PRIOR_MEAN47                  = 1
+NOISEAMP_PRIOR_RMS47                   = 0
+GAIN_PRIOR_MEAN47                      = 1
+GAIN_PRIOR_RMS47                       = 0
+GAIN_CALIB_COMPONENT47                 = 1
+GAIN_LMIN47                            = -1
+GAIN_LMAX47                            = -1
+
+# ------------ Band 48: 1325 GHz | FOSSIL_086
+FREQ_LABEL48                           = 'FOSSIL_086'
+FREQ_UNIT48                            = 'MJy/sr'
+FREQ_C48                               = 1325
+MAP48_0001                             = 'nside64/maps/map_FOSSIL_1325GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS48                            = 'nside64/maps/rms_FOSSIL_1325GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB48                       = 'nside64/mask_fullsky.fits'
+
+BEAM48                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE48                        = 'delta'
+BP_RMS48                               = 0
+A2T48                                  = 0
+F2T48                                  = 0
+CO2T48                                 = 0
+A2SZ48                                 = 0
+
+FIX_MONOPOLE48                         = .true.
+FIX_DIPOLE48                           = .true.
+REG_NOISE_SCALE48                      = 0
+NOISEAMP_PRIOR_MEAN48                  = 1
+NOISEAMP_PRIOR_RMS48                   = 0
+GAIN_PRIOR_MEAN48                      = 1
+GAIN_PRIOR_RMS48                       = 0
+GAIN_CALIB_COMPONENT48                 = 1
+GAIN_LMIN48                            = -1
+GAIN_LMAX48                            = -1
+
+# ------------ Band 49: 1340 GHz | FOSSIL_087
+FREQ_LABEL49                           = 'FOSSIL_087'
+FREQ_UNIT49                            = 'MJy/sr'
+FREQ_C49                               = 1340
+MAP49_0001                             = 'nside64/maps/map_FOSSIL_1340GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS49                            = 'nside64/maps/rms_FOSSIL_1340GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB49                       = 'nside64/mask_fullsky.fits'
+
+BEAM49                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE49                        = 'delta'
+BP_RMS49                               = 0
+A2T49                                  = 0
+F2T49                                  = 0
+CO2T49                                 = 0
+A2SZ49                                 = 0
+
+FIX_MONOPOLE49                         = .true.
+FIX_DIPOLE49                           = .true.
+REG_NOISE_SCALE49                      = 0
+NOISEAMP_PRIOR_MEAN49                  = 1
+NOISEAMP_PRIOR_RMS49                   = 0
+GAIN_PRIOR_MEAN49                      = 1
+GAIN_PRIOR_RMS49                       = 0
+GAIN_CALIB_COMPONENT49                 = 1
+GAIN_LMIN49                            = -1
+GAIN_LMAX49                            = -1
+
+# ------------ Band 50: 1355 GHz | FOSSIL_088
+FREQ_LABEL50                           = 'FOSSIL_088'
+FREQ_UNIT50                            = 'MJy/sr'
+FREQ_C50                               = 1355
+MAP50_0001                             = 'nside64/maps/map_FOSSIL_1355GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS50                            = 'nside64/maps/rms_FOSSIL_1355GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB50                       = 'nside64/mask_fullsky.fits'
+
+BEAM50                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE50                        = 'delta'
+BP_RMS50                               = 0
+A2T50                                  = 0
+F2T50                                  = 0
+CO2T50                                 = 0
+A2SZ50                                 = 0
+
+FIX_MONOPOLE50                         = .true.
+FIX_DIPOLE50                           = .true.
+REG_NOISE_SCALE50                      = 0
+NOISEAMP_PRIOR_MEAN50                  = 1
+NOISEAMP_PRIOR_RMS50                   = 0
+GAIN_PRIOR_MEAN50                      = 1
+GAIN_PRIOR_RMS50                       = 0
+GAIN_CALIB_COMPONENT50                 = 1
+GAIN_LMIN50                            = -1
+GAIN_LMAX50                            = -1
+
+# ------------ Band 51: 1535 GHz | FOSSIL_100
+FREQ_LABEL51                           = 'FOSSIL_100'
+FREQ_UNIT51                            = 'MJy/sr'
+FREQ_C51                               = 1535
+MAP51_0001                             = 'nside64/maps/map_FOSSIL_1535GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS51                            = 'nside64/maps/rms_FOSSIL_1535GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB51                       = 'nside64/mask_fullsky.fits'
+
+BEAM51                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE51                        = 'delta'
+BP_RMS51                               = 0
+A2T51                                  = 0
+F2T51                                  = 0
+CO2T51                                 = 0
+A2SZ51                                 = 0
+
+FIX_MONOPOLE51                         = .true.
+FIX_DIPOLE51                           = .true.
+REG_NOISE_SCALE51                      = 0
+NOISEAMP_PRIOR_MEAN51                  = 1
+NOISEAMP_PRIOR_RMS51                   = 0
+GAIN_PRIOR_MEAN51                      = 1
+GAIN_PRIOR_RMS51                       = 0
+GAIN_CALIB_COMPONENT51                 = 1
+GAIN_LMIN51                            = -1
+GAIN_LMAX51                            = -1
+
+# ------------ Band 52: 1550 GHz | FOSSIL_101
+FREQ_LABEL52                           = 'FOSSIL_101'
+FREQ_UNIT52                            = 'MJy/sr'
+FREQ_C52                               = 1550
+MAP52_0001                             = 'nside64/maps/map_FOSSIL_1550GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS52                            = 'nside64/maps/rms_FOSSIL_1550GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB52                       = 'nside64/mask_fullsky.fits'
+
+BEAM52                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE52                        = 'delta'
+BP_RMS52                               = 0
+A2T52                                  = 0
+F2T52                                  = 0
+CO2T52                                 = 0
+A2SZ52                                 = 0
+
+FIX_MONOPOLE52                         = .true.
+FIX_DIPOLE52                           = .true.
+REG_NOISE_SCALE52                      = 0
+NOISEAMP_PRIOR_MEAN52                  = 1
+NOISEAMP_PRIOR_RMS52                   = 0
+GAIN_PRIOR_MEAN52                      = 1
+GAIN_PRIOR_RMS52                       = 0
+GAIN_CALIB_COMPONENT52                 = 1
+GAIN_LMIN52                            = -1
+GAIN_LMAX52                            = -1
+
+# ------------ Band 53: 1565 GHz | FOSSIL_102
+FREQ_LABEL53                           = 'FOSSIL_102'
+FREQ_UNIT53                            = 'MJy/sr'
+FREQ_C53                               = 1565
+MAP53_0001                             = 'nside64/maps/map_FOSSIL_1565GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS53                            = 'nside64/maps/rms_FOSSIL_1565GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB53                       = 'nside64/mask_fullsky.fits'
+
+BEAM53                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE53                        = 'delta'
+BP_RMS53                               = 0
+A2T53                                  = 0
+F2T53                                  = 0
+CO2T53                                 = 0
+A2SZ53                                 = 0
+
+FIX_MONOPOLE53                         = .true.
+FIX_DIPOLE53                           = .true.
+REG_NOISE_SCALE53                      = 0
+NOISEAMP_PRIOR_MEAN53                  = 1
+NOISEAMP_PRIOR_RMS53                   = 0
+GAIN_PRIOR_MEAN53                      = 1
+GAIN_PRIOR_RMS53                       = 0
+GAIN_CALIB_COMPONENT53                 = 1
+GAIN_LMIN53                            = -1
+GAIN_LMAX53                            = -1
+
+# ------------ Band 54: 1580 GHz | FOSSIL_103
+FREQ_LABEL54                           = 'FOSSIL_103'
+FREQ_UNIT54                            = 'MJy/sr'
+FREQ_C54                               = 1580
+MAP54_0001                             = 'nside64/maps/map_FOSSIL_1580GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS54                            = 'nside64/maps/rms_FOSSIL_1580GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB54                       = 'nside64/mask_fullsky.fits'
+
+BEAM54                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE54                        = 'delta'
+BP_RMS54                               = 0
+A2T54                                  = 0
+F2T54                                  = 0
+CO2T54                                 = 0
+A2SZ54                                 = 0
+
+FIX_MONOPOLE54                         = .true.
+FIX_DIPOLE54                           = .true.
+REG_NOISE_SCALE54                      = 0
+NOISEAMP_PRIOR_MEAN54                  = 1
+NOISEAMP_PRIOR_RMS54                   = 0
+GAIN_PRIOR_MEAN54                      = 1
+GAIN_PRIOR_RMS54                       = 0
+GAIN_CALIB_COMPONENT54                 = 1
+GAIN_LMIN54                            = -1
+GAIN_LMAX54                            = -1
+
+# ------------ Band 55: 1700 GHz | FOSSIL_111
+FREQ_LABEL55                           = 'FOSSIL_111'
+FREQ_UNIT55                            = 'MJy/sr'
+FREQ_C55                               = 1700
+MAP55_0001                             = 'nside64/maps/map_FOSSIL_1700GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS55                            = 'nside64/maps/rms_FOSSIL_1700GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB55                       = 'nside64/mask_fullsky.fits'
+
+BEAM55                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE55                        = 'delta'
+BP_RMS55                               = 0
+A2T55                                  = 0
+F2T55                                  = 0
+CO2T55                                 = 0
+A2SZ55                                 = 0
+
+FIX_MONOPOLE55                         = .true.
+FIX_DIPOLE55                           = .true.
+REG_NOISE_SCALE55                      = 0
+NOISEAMP_PRIOR_MEAN55                  = 1
+NOISEAMP_PRIOR_RMS55                   = 0
+GAIN_PRIOR_MEAN55                      = 1
+GAIN_PRIOR_RMS55                       = 0
+GAIN_CALIB_COMPONENT55                 = 1
+GAIN_LMIN55                            = -1
+GAIN_LMAX55                            = -1
+
+# ------------ Band 56: 1715 GHz | FOSSIL_112
+FREQ_LABEL56                           = 'FOSSIL_112'
+FREQ_UNIT56                            = 'MJy/sr'
+FREQ_C56                               = 1715
+MAP56_0001                             = 'nside64/maps/map_FOSSIL_1715GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS56                            = 'nside64/maps/rms_FOSSIL_1715GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB56                       = 'nside64/mask_fullsky.fits'
+
+BEAM56                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE56                        = 'delta'
+BP_RMS56                               = 0
+A2T56                                  = 0
+F2T56                                  = 0
+CO2T56                                 = 0
+A2SZ56                                 = 0
+
+FIX_MONOPOLE56                         = .true.
+FIX_DIPOLE56                           = .true.
+REG_NOISE_SCALE56                      = 0
+NOISEAMP_PRIOR_MEAN56                  = 1
+NOISEAMP_PRIOR_RMS56                   = 0
+GAIN_PRIOR_MEAN56                      = 1
+GAIN_PRIOR_RMS56                       = 0
+GAIN_CALIB_COMPONENT56                 = 1
+GAIN_LMIN56                            = -1
+GAIN_LMAX56                            = -1
+
+# ------------ Band 57: 1730 GHz | FOSSIL_113
+FREQ_LABEL57                           = 'FOSSIL_113'
+FREQ_UNIT57                            = 'MJy/sr'
+FREQ_C57                               = 1730
+MAP57_0001                             = 'nside64/maps/map_FOSSIL_1730GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS57                            = 'nside64/maps/rms_FOSSIL_1730GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB57                       = 'nside64/mask_fullsky.fits'
+
+BEAM57                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE57                        = 'delta'
+BP_RMS57                               = 0
+A2T57                                  = 0
+F2T57                                  = 0
+CO2T57                                 = 0
+A2SZ57                                 = 0
+
+FIX_MONOPOLE57                         = .true.
+FIX_DIPOLE57                           = .true.
+REG_NOISE_SCALE57                      = 0
+NOISEAMP_PRIOR_MEAN57                  = 1
+NOISEAMP_PRIOR_RMS57                   = 0
+GAIN_PRIOR_MEAN57                      = 1
+GAIN_PRIOR_RMS57                       = 0
+GAIN_CALIB_COMPONENT57                 = 1
+GAIN_LMIN57                            = -1
+GAIN_LMAX57                            = -1
+
+# ------------ Band 58: 1850 GHz | FOSSIL_121
+FREQ_LABEL58                           = 'FOSSIL_121'
+FREQ_UNIT58                            = 'MJy/sr'
+FREQ_C58                               = 1850
+MAP58_0001                             = 'nside64/maps/map_FOSSIL_1850GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS58                            = 'nside64/maps/rms_FOSSIL_1850GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB58                       = 'nside64/mask_fullsky.fits'
+
+BEAM58                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE58                        = 'delta'
+BP_RMS58                               = 0
+A2T58                                  = 0
+F2T58                                  = 0
+CO2T58                                 = 0
+A2SZ58                                 = 0
+
+FIX_MONOPOLE58                         = .true.
+FIX_DIPOLE58                           = .true.
+REG_NOISE_SCALE58                      = 0
+NOISEAMP_PRIOR_MEAN58                  = 1
+NOISEAMP_PRIOR_RMS58                   = 0
+GAIN_PRIOR_MEAN58                      = 1
+GAIN_PRIOR_RMS58                       = 0
+GAIN_CALIB_COMPONENT58                 = 1
+GAIN_LMIN58                            = -1
+GAIN_LMAX58                            = -1
+
+# ------------ Band 59: 1865 GHz | FOSSIL_122
+FREQ_LABEL59                           = 'FOSSIL_122'
+FREQ_UNIT59                            = 'MJy/sr'
+FREQ_C59                               = 1865
+MAP59_0001                             = 'nside64/maps/map_FOSSIL_1865GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS59                            = 'nside64/maps/rms_FOSSIL_1865GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB59                       = 'nside64/mask_fullsky.fits'
+
+BEAM59                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE59                        = 'delta'
+BP_RMS59                               = 0
+A2T59                                  = 0
+F2T59                                  = 0
+CO2T59                                 = 0
+A2SZ59                                 = 0
+
+FIX_MONOPOLE59                         = .true.
+FIX_DIPOLE59                           = .true.
+REG_NOISE_SCALE59                      = 0
+NOISEAMP_PRIOR_MEAN59                  = 1
+NOISEAMP_PRIOR_RMS59                   = 0
+GAIN_PRIOR_MEAN59                      = 1
+GAIN_PRIOR_RMS59                       = 0
+GAIN_CALIB_COMPONENT59                 = 1
+GAIN_LMIN59                            = -1
+GAIN_LMAX59                            = -1
+
+# ------------ Band 60: 1880 GHz | FOSSIL_123
+FREQ_LABEL60                           = 'FOSSIL_123'
+FREQ_UNIT60                            = 'MJy/sr'
+FREQ_C60                               = 1880
+MAP60_0001                             = 'nside64/maps/map_FOSSIL_1880GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS60                            = 'nside64/maps/rms_FOSSIL_1880GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB60                       = 'nside64/mask_fullsky.fits'
+
+BEAM60                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE60                        = 'delta'
+BP_RMS60                               = 0
+A2T60                                  = 0
+F2T60                                  = 0
+CO2T60                                 = 0
+A2SZ60                                 = 0
+
+FIX_MONOPOLE60                         = .true.
+FIX_DIPOLE60                           = .true.
+REG_NOISE_SCALE60                      = 0
+NOISEAMP_PRIOR_MEAN60                  = 1
+NOISEAMP_PRIOR_RMS60                   = 0
+GAIN_PRIOR_MEAN60                      = 1
+GAIN_PRIOR_RMS60                       = 0
+GAIN_CALIB_COMPONENT60                 = 1
+GAIN_LMIN60                            = -1
+GAIN_LMAX60                            = -1
+
+# ------------ Band 61: 1895 GHz | FOSSIL_124
+FREQ_LABEL61                           = 'FOSSIL_124'
+FREQ_UNIT61                            = 'MJy/sr'
+FREQ_C61                               = 1895
+MAP61_0001                             = 'nside64/maps/map_FOSSIL_1895GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS61                            = 'nside64/maps/rms_FOSSIL_1895GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB61                       = 'nside64/mask_fullsky.fits'
+
+BEAM61                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE61                        = 'delta'
+BP_RMS61                               = 0
+A2T61                                  = 0
+F2T61                                  = 0
+CO2T61                                 = 0
+A2SZ61                                 = 0
+
+FIX_MONOPOLE61                         = .true.
+FIX_DIPOLE61                           = .true.
+REG_NOISE_SCALE61                      = 0
+NOISEAMP_PRIOR_MEAN61                  = 1
+NOISEAMP_PRIOR_RMS61                   = 0
+GAIN_PRIOR_MEAN61                      = 1
+GAIN_PRIOR_RMS61                       = 0
+GAIN_CALIB_COMPONENT61                 = 1
+GAIN_LMIN61                            = -1
+GAIN_LMAX61                            = -1
+
+# ------------ Band 62: 1970 GHz | FOSSIL_129
+FREQ_LABEL62                           = 'FOSSIL_129'
+FREQ_UNIT62                            = 'MJy/sr'
+FREQ_C62                               = 1970
+MAP62_0001                             = 'nside64/maps/map_FOSSIL_1970GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS62                            = 'nside64/maps/rms_FOSSIL_1970GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB62                       = 'nside64/mask_fullsky.fits'
+
+BEAM62                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE62                        = 'delta'
+BP_RMS62                               = 0
+A2T62                                  = 0
+F2T62                                  = 0
+CO2T62                                 = 0
+A2SZ62                                 = 0
+
+FIX_MONOPOLE62                         = .true.
+FIX_DIPOLE62                           = .true.
+REG_NOISE_SCALE62                      = 0
+NOISEAMP_PRIOR_MEAN62                  = 1
+NOISEAMP_PRIOR_RMS62                   = 0
+GAIN_PRIOR_MEAN62                      = 1
+GAIN_PRIOR_RMS62                       = 0
+GAIN_CALIB_COMPONENT62                 = 1
+GAIN_LMIN62                            = -1
+GAIN_LMAX62                            = -1
+
+# ------------ Band 63: 1985 GHz | FOSSIL_130
+FREQ_LABEL63                           = 'FOSSIL_130'
+FREQ_UNIT63                            = 'MJy/sr'
+FREQ_C63                               = 1985
+MAP63_0001                             = 'nside64/maps/map_FOSSIL_1985GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS63                            = 'nside64/maps/rms_FOSSIL_1985GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB63                       = 'nside64/mask_fullsky.fits'
+
+BEAM63                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE63                        = 'delta'
+BP_RMS63                               = 0
+A2T63                                  = 0
+F2T63                                  = 0
+CO2T63                                 = 0
+A2SZ63                                 = 0
+
+FIX_MONOPOLE63                         = .true.
+FIX_DIPOLE63                           = .true.
+REG_NOISE_SCALE63                      = 0
+NOISEAMP_PRIOR_MEAN63                  = 1
+NOISEAMP_PRIOR_RMS63                   = 0
+GAIN_PRIOR_MEAN63                      = 1
+GAIN_PRIOR_RMS63                       = 0
+GAIN_CALIB_COMPONENT63                 = 1
+GAIN_LMIN63                            = -1
+GAIN_LMAX63                            = -1
+
+# ------------ Band 64: 2000 GHz | FOSSIL_131
+FREQ_LABEL64                           = 'FOSSIL_131'
+FREQ_UNIT64                            = 'MJy/sr'
+FREQ_C64                               = 2000
+MAP64_0001                             = 'nside64/maps/map_FOSSIL_2000GHz_fwhm096arcmin_nside0064_MJy-sr_noisy.fits'
+NOISE_RMS64                            = 'nside64/maps/rms_FOSSIL_2000GHz_fwhm096arcmin_nside0064_MJy-sr.fits'
+MASKFILE_CALIB64                       = 'nside64/mask_fullsky.fits'
+
+BEAM64                                 = 'beam_1p6deg.fits'
+BANDPASS_TYPE64                        = 'delta'
+BP_RMS64                               = 0
+A2T64                                  = 0
+F2T64                                  = 0
+CO2T64                                 = 0
+A2SZ64                                 = 0
+
+FIX_MONOPOLE64                         = .true.
+FIX_DIPOLE64                           = .true.
+REG_NOISE_SCALE64                      = 0
+NOISEAMP_PRIOR_MEAN64                  = 1
+NOISEAMP_PRIOR_RMS64                   = 0
+GAIN_PRIOR_MEAN64                      = 1
+GAIN_PRIOR_RMS64                       = 0
+GAIN_CALIB_COMPONENT64                 = 1
+GAIN_LMIN64                            = -1
+GAIN_LMAX64                            = -1
+
+# ----------------------------------------------------------------------------
+# 11. Galactic pixel components
+# ----------------------------------------------------------------------------
+# Local amplitude maps use MJy/sr at each component's reference frequency.
+# A zero spectral Gaussian STDDEV freezes that parameter at its input map.
+# Positive STDDEV activates spectral fitting/sampling with the listed prior.
+
+NUM_FG_TEMP                            = 0                  # No fitted instrumental templates
+NUM_FG_SIGNAL_COMPONENTS               = 6
+APPLY_PAR_RMS_SMOOTHING                = .false.
+OPTIMIZE_PRIORS                        = .false.
+FOSSIL_EXACT_LOCAL_SEDS                = .true.             # Use the exact matched local spectral equations
+
+# ------------ Sky component 01: Thermal dust: modified blackbody
+COMP_TYPE01                            = 'one-component_dust'
+FG_LABEL01                             = 'dust'
+FG_UNIT01                              = 'MJy/sr'
+REFERENCE_FREQUENCY01                  = 545                # GHz; normalization of the amplitude map
+REFERENCE_BAND01                       = 28                 # Active band index at the reference frequency
+INITIALIZATION_MODE01                  = 'input_map'
+INITIAL_AMPLITUDE_MAP01                = 'nside64/truth/dust_amplitude.fits'
+SAMPLE_AMPLITUDES01                    = .false.            # False = hold input amplitude map fixed
+ENFORCE_POSITIVE_AMPLITUDE01           = .false.
+
+COMPONENT_MASK01                       = 'fullsky'
+INDEX_SAMPLING_MASK01                  = 'fullsky'
+PRIOR_OPTIMIZATION_MASK01              = 'fullsky'
+IMPOSE_FG_ORTHOGONALITY01              = .false.
+APPLY_JEFFREYS_PRIOR01                 = .false.
+OUTPUT_FREQUENCY_COMPONENT_MAPS01      = .false.
+
+# Spectral parameter 01: Dust emissivity index beta
+DEFAULT_EMISSIVITY01                   = 1.53
+INIT_INDEX_MAP01_01                    = 'nside64/truth/dust_beta.fits'
+REGION_DEFINITION01_01                 = 'single_pix TQU 64'
+FWHM_PAR01_01                          = 0
+OPTIMIZE_PRIOR_MEAN01_01               = .false.
+
+EMISSIVITY_PRIOR_UNIFORM_LOW01         = 0.5
+EMISSIVITY_PRIOR_UNIFORM_HIGH01        = 2.8
+EMISSIVITY_PRIOR_GAUSSIAN_MEAN01       = 1.53
+EMISSIVITY_PRIOR_GAUSSIAN_STDDEV01     = 0                  # 0 = fixed; >0 = Gaussian prior width
+
+# Spectral parameter 02: Dust temperature [K]
+DEFAULT_DUST_TEMP01                    = 21.7
+INIT_INDEX_MAP01_02                    = 'nside64/truth/dust_temperature.fits'
+REGION_DEFINITION01_02                 = 'single_pix TQU 64'
+FWHM_PAR01_02                          = 0
+OPTIMIZE_PRIOR_MEAN01_02               = .false.
+
+DUST_TEMP_PRIOR_UNIFORM_LOW01          = 8
+DUST_TEMP_PRIOR_UNIFORM_HIGH01         = 45
+DUST_TEMP_PRIOR_GAUSSIAN_MEAN01        = 21.7
+DUST_TEMP_PRIOR_GAUSSIAN_STDDEV01      = 0                  # 0 = fixed; >0 = Gaussian prior width
+
+NU_FLATTENING01                        = 100
+FRAC_FLATTENING01                      = 0
+
+# ------------ Sky component 02: Synchrotron: curved power law
+COMP_TYPE02                            = 'power_law'
+FG_LABEL02                             = 'synch'
+FG_UNIT02                              = 'MJy/sr'
+REFERENCE_FREQUENCY02                  = 50                 # GHz; normalization of the amplitude map
+REFERENCE_BAND02                       = 1                  # Active band index at the reference frequency
+INITIALIZATION_MODE02                  = 'input_map'
+INITIAL_AMPLITUDE_MAP02                = 'nside64/truth/synch_amplitude.fits'
+SAMPLE_AMPLITUDES02                    = .false.            # False = hold input amplitude map fixed
+ENFORCE_POSITIVE_AMPLITUDE02           = .false.
+
+COMPONENT_MASK02                       = 'fullsky'
+INDEX_SAMPLING_MASK02                  = 'fullsky'
+PRIOR_OPTIMIZATION_MASK02              = 'fullsky'
+IMPOSE_FG_ORTHOGONALITY02              = .false.
+APPLY_JEFFREYS_PRIOR02                 = .false.
+OUTPUT_FREQUENCY_COMPONENT_MAPS02      = .false.
+
+# Spectral parameter 01: RJ spectral index beta
+DEFAULT_SPECTRAL_INDEX02               = -3
+INIT_INDEX_MAP02_01                    = 'nside64/truth/synch_beta.fits'
+REGION_DEFINITION02_01                 = 'single_pix TQU 64'
+FWHM_PAR02_01                          = 0
+OPTIMIZE_PRIOR_MEAN02_01               = .false.
+
+INDEX_PRIOR_UNIFORM_LOW02              = -5
+INDEX_PRIOR_UNIFORM_HIGH02             = -1.5
+INDEX_PRIOR_GAUSSIAN_MEAN02            = -3
+INDEX_PRIOR_GAUSSIAN_STDDEV02          = 0                  # 0 = fixed; >0 = Gaussian prior width
+
+# Spectral parameter 02: Spectral curvature (fixed)
+DEFAULT_CURVATURE02                    = 0
+INIT_INDEX_MAP02_02                    = 'nside64/truth/synch_curvature.fits'
+REGION_DEFINITION02_02                 = 'single_pix TQU 64'
+FWHM_PAR02_02                          = 0
+OPTIMIZE_PRIOR_MEAN02_02               = .false.
+
+CURVATURE_PRIOR_UNIFORM_LOW02          = -0.5
+CURVATURE_PRIOR_UNIFORM_HIGH02         = 0.5
+CURVATURE_PRIOR_GAUSSIAN_MEAN02        = 0
+CURVATURE_PRIOR_GAUSSIAN_STDDEV02      = 0                  # 0 = fixed; >0 = Gaussian prior width
+
+# ------------ Sky component 03: Draine free-free: amplitude plus electron temperature
+COMP_TYPE03                            = 'freefree'
+FG_LABEL03                             = 'freefree'
+FG_UNIT03                              = 'MJy/sr'
+REFERENCE_FREQUENCY03                  = 50                 # GHz; normalization of the amplitude map
+REFERENCE_BAND03                       = 1                  # Active band index at the reference frequency
+INITIALIZATION_MODE03                  = 'input_map'
+INITIAL_AMPLITUDE_MAP03                = 'nside64/truth/freefree_amplitude.fits'
+SAMPLE_AMPLITUDES03                    = .false.            # False = hold input amplitude map fixed
+ENFORCE_POSITIVE_AMPLITUDE03           = .false.
+
+COMPONENT_MASK03                       = 'fullsky'
+INDEX_SAMPLING_MASK03                  = 'fullsky'
+PRIOR_OPTIMIZATION_MASK03              = 'fullsky'
+IMPOSE_FG_ORTHOGONALITY03              = .false.
+APPLY_JEFFREYS_PRIOR03                 = .false.
+OUTPUT_FREQUENCY_COMPONENT_MAPS03      = .false.
+
+# Spectral parameter 01: Electron temperature Te [K]
+DEFAULT_T_E03                          = 7000
+INIT_INDEX_MAP03_01                    = 'nside64/truth/freefree_temperature.fits'
+REGION_DEFINITION03_01                 = 'single_pix TQU 64'
+FWHM_PAR03_01                          = 0
+OPTIMIZE_PRIOR_MEAN03_01               = .false.
+
+T_E_PRIOR_UNIFORM_LOW03                = 3000
+T_E_PRIOR_UNIFORM_HIGH03               = 15000
+T_E_PRIOR_GAUSSIAN_MEAN03              = 7000
+T_E_PRIOR_GAUSSIAN_STDDEV03            = 0                  # 0 = fixed; >0 = Gaussian prior width
+
+# ------------ Sky component 04: AME population 1: shifted spinning-dust template
+COMP_TYPE04                            = 'AME_freq_shift'
+FG_LABEL04                             = 'ame1'
+FG_UNIT04                              = 'MJy/sr'
+REFERENCE_FREQUENCY04                  = 50                 # GHz; normalization of the amplitude map
+REFERENCE_BAND04                       = 1                  # Active band index at the reference frequency
+INITIALIZATION_MODE04                  = 'input_map'
+INITIAL_AMPLITUDE_MAP04                = 'nside64/truth/ame1_amplitude.fits'
+SAMPLE_AMPLITUDES04                    = .false.            # False = hold input amplitude map fixed
+ENFORCE_POSITIVE_AMPLITUDE04           = .false.
+
+COMPONENT_MASK04                       = 'fullsky'
+INDEX_SAMPLING_MASK04                  = 'fullsky'
+PRIOR_OPTIMIZATION_MASK04              = 'fullsky'
+IMPOSE_FG_ORTHOGONALITY04              = .false.
+APPLY_JEFFREYS_PRIOR04                 = .false.
+OUTPUT_FREQUENCY_COMPONENT_MAPS04      = .false.
+
+SPECTRUM_FILENAME04                    = 'spectra/ame_emissivity_GHz.txt' # Two-column spectral template; frequency in GHz
+
+# Spectral parameter 01: Spinning-dust peak frequency [GHz]
+DEFAULT_FREQUENCY04                    = 30
+INIT_INDEX_MAP04_01                    = 'nside64/truth/ame1_peak.fits'
+REGION_DEFINITION04_01                 = 'single_pix TQU 64'
+FWHM_PAR04_01                          = 0
+OPTIMIZE_PRIOR_MEAN04_01               = .false.
+
+FREQUENCY_PRIOR_UNIFORM_LOW04          = 10
+FREQUENCY_PRIOR_UNIFORM_HIGH04         = 70
+FREQUENCY_PRIOR_GAUSSIAN_MEAN04        = 30
+FREQUENCY_PRIOR_GAUSSIAN_STDDEV04      = 0                  # 0 = fixed; >0 = Gaussian prior width
+
+# ------------ Sky component 05: AME population 2: shifted spinning-dust template
+COMP_TYPE05                            = 'AME_freq_shift'
+FG_LABEL05                             = 'ame2'
+FG_UNIT05                              = 'MJy/sr'
+REFERENCE_FREQUENCY05                  = 50                 # GHz; normalization of the amplitude map
+REFERENCE_BAND05                       = 1                  # Active band index at the reference frequency
+INITIALIZATION_MODE05                  = 'input_map'
+INITIAL_AMPLITUDE_MAP05                = 'nside64/truth/ame2_amplitude.fits'
+SAMPLE_AMPLITUDES05                    = .false.            # False = hold input amplitude map fixed
+ENFORCE_POSITIVE_AMPLITUDE05           = .false.
+
+COMPONENT_MASK05                       = 'fullsky'
+INDEX_SAMPLING_MASK05                  = 'fullsky'
+PRIOR_OPTIMIZATION_MASK05              = 'fullsky'
+IMPOSE_FG_ORTHOGONALITY05              = .false.
+APPLY_JEFFREYS_PRIOR05                 = .false.
+OUTPUT_FREQUENCY_COMPONENT_MAPS05      = .false.
+
+SPECTRUM_FILENAME05                    = 'spectra/ame_emissivity_GHz.txt' # Two-column spectral template; frequency in GHz
+
+# Spectral parameter 01: Spinning-dust peak frequency [GHz]
+DEFAULT_FREQUENCY05                    = 33.35
+INIT_INDEX_MAP05_01                    = 'nside64/truth/ame2_peak.fits'
+REGION_DEFINITION05_01                 = 'single_pix TQU 64'
+FWHM_PAR05_01                          = 0
+OPTIMIZE_PRIOR_MEAN05_01               = .false.
+
+FREQUENCY_PRIOR_UNIFORM_LOW05          = 10
+FREQUENCY_PRIOR_UNIFORM_HIGH05         = 70
+FREQUENCY_PRIOR_GAUSSIAN_MEAN05        = 33.35
+FREQUENCY_PRIOR_GAUSSIAN_STDDEV05      = 0                  # 0 = fixed; >0 = Gaussian prior width
+
+# ------------ Sky component 06: Primary CMB temperature anisotropy
+COMP_TYPE06                            = 'cmb'
+FG_LABEL06                             = 'cmb'
+FG_UNIT06                              = 'MJy/sr'
+REFERENCE_FREQUENCY06                  = 50                 # GHz; normalization of the amplitude map
+REFERENCE_BAND06                       = 1                  # Active band index at the reference frequency
+INITIALIZATION_MODE06                  = 'input_map'
+INITIAL_AMPLITUDE_MAP06                = 'nside64/truth/cmb_amplitude.fits'
+SAMPLE_AMPLITUDES06                    = .false.            # False = hold input amplitude map fixed
+ENFORCE_POSITIVE_AMPLITUDE06           = .false.
+
+COMPONENT_MASK06                       = 'fullsky'
+INDEX_SAMPLING_MASK06                  = 'fullsky'
+PRIOR_OPTIMIZATION_MASK06              = 'fullsky'
+IMPOSE_FG_ORTHOGONALITY06              = .false.
+APPLY_JEFFREYS_PRIOR06                 = .false.
+OUTPUT_FREQUENCY_COMPONENT_MAPS06      = .false.
+
+# ----------------------------------------------------------------------------
+# 12. Spatially constant physical sky components
+# ----------------------------------------------------------------------------
+# One amplitude per physical component, shared by every sky pixel.
+# These are sky signals with frequency dependence, not per-band offsets.
+# GLOBAL_PRIOR_SIGMA <= 0 disables the Gaussian amplitude prior.
+# GLOBAL_SCALE rescales the numerical solve; it does not change the physics.
+
+NUM_GLOBAL_COMPONENTS                  = 6
+GLOBAL_FIXED_INSTRUMENT                = .true.             # Keep instrumental offsets/gains/bandpass shifts fixed
+GLOBAL_SLICE_STEPS                     = 8
+GLOBAL_RESTART_FILE                    = '/mn/stornext/d23/cmbco/AST9240/2024/gabrieah/fossil_component_separation/tests_64channels_cmb_draine_fullsky/nside64/globals_sample_split1000_64bands_seed20261102/global_restart_c0001.txt' # none = fresh global state; otherwise restore global state/RNG
+
+# ------------ Global component 01: CMB temperature-offset monopole; amplitude = DeltaT/T0
+GLOBAL_TYPE01                          = 'delta_t'
+GLOBAL_LABEL01                         = 'delta_t'
+GLOBAL_INIT01                          = 0.000114
+GLOBAL_SAMPLE_AMPLITUDE01              = .true.             # Enable amplitude updates in the selected OPERATION
+GLOBAL_PRIOR_MEAN01                    = 0.00012
+GLOBAL_PRIOR_SIGMA01                   = -1
+GLOBAL_SCALE01                         = 0.0001
+
+# ------------ Global component 02: mu spectral distortion; dimensionless amplitude
+GLOBAL_TYPE02                          = 'mu'
+GLOBAL_LABEL02                         = 'mu'
+GLOBAL_INIT02                          = 1.9d-08
+GLOBAL_SAMPLE_AMPLITUDE02              = .true.             # Enable amplitude updates in the selected OPERATION
+GLOBAL_PRIOR_MEAN02                    = 2d-08
+GLOBAL_PRIOR_SIGMA02                   = -1
+GLOBAL_SCALE02                         = 1d-08
+
+# ------------ Global component 03: Thermal SZ distortion; amplitude = Compton y
+GLOBAL_TYPE03                          = 'tsz'
+GLOBAL_LABEL03                         = 'y'
+GLOBAL_INIT03                          = 1.6815d-06
+GLOBAL_SAMPLE_AMPLITUDE03              = .true.             # Enable amplitude updates in the selected OPERATION
+GLOBAL_PRIOR_MEAN03                    = 1.77d-06
+GLOBAL_PRIOR_SIGMA03                   = -1
+GLOBAL_SCALE03                         = 1d-06
+
+# Global spectral parameter 01: Electron temperature kTe [keV]
+GLOBAL_INIT_PARAM03_01                 = 1.245
+GLOBAL_SAMPLE_PARAM03_01               = .false.            # False = hold spectral parameter fixed
+GLOBAL_PARAM_LOW03_01                  = 0
+GLOBAL_PARAM_HIGH03_01                 = 10
+GLOBAL_PARAM_PRIOR_MEAN03_01           = 1.245
+GLOBAL_PARAM_PRIOR_SIGMA03_01          = -1                 # <=0 = no Gaussian prior; finite bounds still apply
+
+# ------------ Global component 04: Cosmic infrared background; amplitude coefficient in MJy/sr
+GLOBAL_TYPE04                          = 'cib'
+GLOBAL_LABEL04                         = 'cib'
+GLOBAL_INIT04                          = 0.3286999999999999
+GLOBAL_SAMPLE_AMPLITUDE04              = .true.             # Enable amplitude updates in the selected OPERATION
+GLOBAL_PRIOR_MEAN04                    = 0.346
+GLOBAL_PRIOR_SIGMA04                   = -1
+GLOBAL_SCALE04                         = 1
+
+# Global spectral parameter 01: CIB emissivity index beta
+GLOBAL_INIT_PARAM04_01                 = 0.86
+GLOBAL_SAMPLE_PARAM04_01               = .false.            # False = hold spectral parameter fixed
+GLOBAL_PARAM_LOW04_01                  = 0
+GLOBAL_PARAM_HIGH04_01                 = 3
+GLOBAL_PARAM_PRIOR_MEAN04_01           = 0.86
+GLOBAL_PARAM_PRIOR_SIGMA04_01          = -1                 # <=0 = no Gaussian prior; finite bounds still apply
+
+# Global spectral parameter 02: CIB temperature [K]
+GLOBAL_INIT_PARAM04_02                 = 18.8
+GLOBAL_SAMPLE_PARAM04_02               = .false.            # False = hold spectral parameter fixed
+GLOBAL_PARAM_LOW04_02                  = 5
+GLOBAL_PARAM_HIGH04_02                 = 50
+GLOBAL_PARAM_PRIOR_MEAN04_02           = 18.8
+GLOBAL_PARAM_PRIOR_SIGMA04_02          = -1                 # <=0 = no Gaussian prior; finite bounds still apply
+
+# ------------ Global component 05: Cosmological recombination radiation; multiplier of fiducial template
+GLOBAL_TYPE05                          = 'crr'
+GLOBAL_LABEL05                         = 'crr'
+GLOBAL_INIT05                          = 0.95
+GLOBAL_SAMPLE_AMPLITUDE05              = .true.             # Enable amplitude updates in the selected OPERATION
+GLOBAL_PRIOR_MEAN05                    = 1
+GLOBAL_PRIOR_SIGMA05                   = -1
+GLOBAL_SCALE05                         = 1
+GLOBAL_TEMPLATE05                      = 'spectra/crr_MJy_sr.txt' # Frequency [GHz], intensity [MJy/sr]
+
+# ------------ Global component 06: Aggregate extragalactic CO; multiplier of fiducial template
+GLOBAL_TYPE06                          = 'co'
+GLOBAL_LABEL06                         = 'co'
+GLOBAL_INIT06                          = 0.95
+GLOBAL_SAMPLE_AMPLITUDE06              = .true.             # Enable amplitude updates in the selected OPERATION
+GLOBAL_PRIOR_MEAN06                    = 1
+GLOBAL_PRIOR_SIGMA06                   = -1
+GLOBAL_SCALE06                         = 1
+GLOBAL_TEMPLATE06                      = 'spectra/co_MJy_sr.txt' # Frequency [GHz], intensity [MJy/sr]

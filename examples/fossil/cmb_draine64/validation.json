@@ -1,0 +1,24 @@
+{
+  "status": "passed",
+  "manifest_signature": "cff28d9447fc29b5fb69d1fb84e8c223943a0c04e874e17ff24697ab87090fdc",
+  "manifest_sha256": "a0498453c0bef1b97cf29eeaa095900610c533aac22297fa1eeb78b2d77a23a3",
+  "selection_profile_sha256": "8a8f651e259d5c964a93864d0dc7f9f43e70b69d88c42001e6044bb720b91ad1",
+  "selected_static_files": 26,
+  "full_static_files": 2,
+  "checked_local_input_files": 714,
+  "local_input_files_verified": true,
+  "primary_cmb_anisotropy": true,
+  "freefree_model": "draine_gaunt_amplitude_plus_Te",
+  "selected_mpi_ranks": 64,
+  "full_mpi_ranks": 131,
+  "required_recompile": true,
+  "commander_or_mpi_executed": false,
+  "cluster_acceptance": "pending",
+  "original_pdf_only_static_suite_modified": false,
+  "analysis_signature": "c286eea929abed8028043cb7f7cf4e219c07acd89cbfcb2e13d825605c67eb9b",
+  "analysis_mask": "fullsky",
+  "postprocess_masks": {
+    "128": "nside128/mask_GAL070_binary.fits",
+    "64": "nside64/mask_GAL070_binary.fits"
+  }
+}

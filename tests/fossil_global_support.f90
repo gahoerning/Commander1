@@ -85,6 +85,12 @@ contains
     error stop 1
   end subroutine mpi_abort
 
+  subroutine mpi_comm_rank(comm,rank,ierr)
+    integer, intent(in) :: comm
+    integer, intent(out) :: rank,ierr
+    rank=0; ierr=0
+  end subroutine mpi_comm_rank
+
   subroutine mpi_bcast(values,n,typ,root,comm,ierr)
     real(dp), intent(inout) :: values(:)
     integer, intent(in) :: n,typ,root,comm
@@ -98,7 +104,7 @@ module comm_bp_mod
   implicit none
   type bandinfo
      character(len=14) :: unit='MJy/sr', id='delta'
-     real(dp) :: nu_c, gain=1.d0, delta=0.d0, delta_rms=0.d0
+     real(dp) :: nu_c, gain=1.d0, delta=0.d0, delta_rms=0.d0, f2t=1.d0
      logical :: use_color_corr=.false.
   end type bandinfo
   integer :: numband

@@ -79,9 +79,11 @@ class AnalyticAcceptanceTests(unittest.TestCase):
                 writer.writerow([i, 50 + i * 15, *row])
         reference = {"64": dict(N_unmasked=123,
                                   bands=[dict(band=i, weight=float(weights[i]),
+                                              frequency_GHz=50 + i * 15,
                                               weighted_sum=float(weighted_sum[i])) for i in range(18)])}
         (root / "global_reference.json").write_text(json.dumps(reference))
-        parameters = {"NUM_GIBBS_ITER": 2500}
+        parameters = {"NUM_GIBBS_ITER": 2500, "NUMBAND": 18}
+        parameters.update({f"FREQ_C{i + 1:02d}": 50 + i * 15 for i in range(18)})
         for i in range(6):
             suffix = f"{i + 1:02d}"
             parameters["GLOBAL_SCALE" + suffix] = scales[i]

@@ -298,7 +298,7 @@ program commander
   call initialize_mp_mod(comm_chain, rng_handle)
 
   ! Initialize signal multiplication module
-  call initialize_S_mult_mod(lmax, nmaps)
+  call initialize_S_mult_mod(lmax, nmaps, paramfile)
   
   ! Initialize noise RMS amplitude module
   call initialize_noisesamp_mod(paramfile)
@@ -444,8 +444,9 @@ contains
     integer(i4b)       :: ierr, numprocs, myid, root, precond_type
     integer(i4b)       :: iter, i, j, k, l, m, num_gibbs_iter, num_step_ml_search
     integer(i4b)       :: first_iteration, ind, iter_thin, thinning_factor, stat, num_bp_step, skip_freq
+    integer(i4b)       :: cmb_min_l
     logical(lgt)       :: condition_on_cl, enforce_zero_cl, sample_inside_mask, exist, sample_bp
-    logical(lgt)       :: output_ml_map_and_covmat
+    logical(lgt)       :: output_ml_map_and_covmat, cmb_min_l_present
     real(dp)           :: t1, t2, chisq_fullsky, chisq_highlat
     character(len=512) :: filename, chain_dir, operation, cmb_md_maskfile
     type(genvec)       :: s_i, s_i_fg, s_prev
@@ -467,6 +468,10 @@ contains
     call get_parameter(paramfile, 'CHAIN_DIRECTORY',               par_string=chain_dir)
     call get_parameter(paramfile, 'VERBOSITY',                     par_int=verbosity)
     call get_parameter(paramfile, 'CMB_MONO_DIPOLE_MASK',          par_string=cmb_md_maskfile)
+    call get_parameter(paramfile,'FOSSIL_CMB_MIN_L',par_int=cmb_min_l,par_present=cmb_min_l_present)
+    if (.not. cmb_min_l_present) cmb_min_l=0
+    if (cmb_min_l==2 .and. trim(cmb_md_maskfile)/='none') &
+         call fossil_global_error('FOSSIL_CMB_MIN_L=2 requires CMB_MONO_DIPOLE_MASK=none; instrumental offsets stay fixed.')
     call get_parameter(paramfile, 'NUM_STEP_WITH_ML_SEARCH',       par_int=num_step_ml_search)
     call get_parameter(paramfile, 'NUM_BP_MCMC_SUBSTEPS',          par_int=num_bp_step)
     call get_parameter(paramfile, 'NUM_FAST_SUBSTEPS',             par_int=skip_freq)

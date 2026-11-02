@@ -31,7 +31,7 @@ def procedure(text, name):
     return match.group(0)
 
 
-def build_context():
+def build_context(si_cmb=False):
     fg=(SRC/"comm_fg_component_mod.f90").read_text()
     bp=(SRC/"comm_bp_mod.f90").read_text()
     spline=(ROOT/"src/include/spline_1D_mod.f90").read_text()
@@ -42,14 +42,13 @@ def build_context():
     constants="\n".join(line for line in bp.splitlines() if re.match(r"\s*real\(dp\), parameter :: (k_B|h|c)\s*=",line))
     funcs=["direct_fossil_component","color_corrected_component","monochromatic_fg_spectrum",
            "foreground_color_factor","get_effective_fg_spectrum","get_effective_deriv_fg_spectrum",
-           "compute_power_law_spectrum","compute_one_comp_dust_spectrum","compute_AME_freq_shift_spectrum",
+           "compute_power_law_spectrum","compute_one_comp_dust_spectrum","compute_AME_freq_shift_spectrum","compute_freefree_spectrum",
            "compute_faraday_rotation","read_spectrum"]
     production="\n".join(procedure(fg,name) for name in funcs)
     ideal=procedure(fg,"get_ideal_fg_spectrum")
     # Unused spectral types are explicit fail-fast doubles; their production
     # dispatcher remains intact and tested branches retain their real routines.
     unrelated={
-        "compute_freefree_spectrum":[0,0,0],
         "compute_AME_freq_shift_2par_spectrum":[0,0,0,0,0,2,1],
         "compute_AME_lognormal_width_spectrum":[0,0,0,0,1],
         "compute_magnetic_dust_spectrum":[0,0,0,2,1],
@@ -82,7 +81,7 @@ module fossil_local_test_context
   type(fg_meta_data),allocatable :: fg_components(:)
   type(bandinfo),allocatable :: bp(:)
   integer :: myid_chain=0,numband=131
-  logical :: fossil_exact_local_seds=.true.,fossil_exact_mjysr_units=.true.
+  logical :: fossil_exact_local_seds=.true.,fossil_exact_mjysr_units=.true.,fossil_si_cmb={'.true.' if si_cmb else '.false.'}
   interface spline
      module procedure spline_plain
   end interface
@@ -218,7 +217,7 @@ end program
 """
 
 
-def run(package,require_compiler):
+def run(package,require_compiler,si_cmb=False):
     reference=np.genfromtxt(package/"local_response.csv",delimiter=",",names=True)
     expected=np.column_stack([reference[name] for name in reference.dtype.names[1:]])
     assert expected.shape==(131,14), expected.shape
@@ -230,7 +229,7 @@ def run(package,require_compiler):
         return
     with tempfile.TemporaryDirectory(prefix="commander-fossil-local-") as tmp:
         work=Path(tmp)
-        (work/"context.f90").write_text(build_context())
+        (work/"context.f90").write_text(build_context(si_cmb=si_cmb))
         (work/"driver.f90").write_text(DRIVER)
         executable=work/"local_sed_test"
         command=compiler+shlex.split(os.environ.get("FFLAGS",""))+[
@@ -258,5 +257,6 @@ if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("package",type=Path,help="Path to portable outputs/commander package")
     parser.add_argument("--require-compiler",action="store_true")
+    parser.add_argument("--si-cmb",action="store_true",help="Check preserved local spectra with the SI CMB conversion enabled")
     args=parser.parse_args()
-    run(args.package.resolve(),args.require_compiler)
+    run(args.package.resolve(),args.require_compiler,si_cmb=args.si_cmb)

@@ -1,5 +1,39 @@
 # FOSSIL validation and remote acceptance
 
+## Operative native-unit validation
+
+Use the `examples/fossil/native_units64/` or `native_units131/` parameter
+files with the derived `fossil_inputs_native_units` package. The physical
+master remains in MJy/sr; band data/RMS use `uK_cmb`, Galactic amplitudes use
+`uK_ant`, and the CMB reference amplitude uses `uK_cmb`. Original internal RJ
+units and the complete foreground/free-free source are unchanged from
+commit8ffea73. SI-matched CMB band calibration is an opt-in boundary conversion.
+
+The global interface converts cached and trial-shape MJy/sr SEDs to the band
+unit. Priors/scalar parameters remain physical, and global spectral snapshots
+remain explicitly MJy/sr. Isolated production tests cover Gaussian conditional
+means/covariances, native/physical likelihood invariance, spectral-shape moves,
+exact checkpoint continuation, and physical spectral-file units. Standard
+free-free spline/derivative and CMB low-mode tests exercise the unchanged path.
+
+```sh
+python3 tests/run_fossil_cmb_tests.py
+python3 tests/run_fossil_native_unit_tests.py /data/fossil_physical_master
+```
+
+The native test's positional package is the archived physical MJy/sr master,
+used as an independent reference. It does not require running MPI. The
+diagnostic notebook uses the native package's verified conversion metadata and
+physical truth maps for actual chain inspection. Conditional references include
+the tiny deterministic difference between the analytic injection and the
+unchanged 100-point free-free temperature table. `NUMGRID_SPLINE` does not
+control that hardcoded foreground table.
+
+A source-hash check and compiled feature marker reject stale installations;
+they do not prove executable build identity or full MPI acceptance. Recompile
+after updating source, run case01 in the new chain directory, and inspect its
+outputs before progressing.
+
 ## What local checks establish
 
 `tests/fossil_parameter_tests.py` uses the standard library to audit generated
@@ -42,7 +76,65 @@ and numerical-library toolchain. Record the compiler and source revision used
 for remote acceptance. Do not mark the following tests passed until their actual
 executable outputs exist.
 
+## Opt-in primary CMB and Draine free-free extension
+
+The versioned `outputs/commander_cmb_draine` physical injection adds primary
+temperature anisotropy and the normalized Draine
+free-free amplitude/Te model. The original PDF-only injection and its static
+parameter suite are preserved. Recompile Commander before using the extension;
+full HEALPix/MPI acceptance of this new path remains pending until actual
+cluster outputs are inspected.
+
+`FOSSIL_SI_CMB=true` makes the physical CMB intensity derivative use exact SI
+constants, consistently with the injected CMB and global DeltaT monopole. Its
+default is false. The internal legacy RJ definition and existing local
+foreground normalization remain unchanged. `FOSSIL_CMB_MIN_L=2` fixes the
+physical harmonic monopole and dipole exactly to zero through the covariance
+and CG transformations; its default zero preserves the earlier behavior. Keep
+`CMB_MONO_DIPOLE_MASK=none` so no removed CMB modes are transferred to fixed
+instrumental offsets. The unwindowed TT input is D_ell in uK_CMB squared;
+`CONDITION_ON_CL=true` fixes this covariance while the harmonic realization is
+free in the coupled amplitude/full-forecast stages.
+
+The existing free-free component has one native RJ reference amplitude and one electron
+temperature in K. It uses `T_E_PRIOR_*` keys and its original spectral table;
+EM is input provenance, not another independently fitted amplitude. Primary CMB
+is fixed to its known truth in the analytic global-only controls. Their global
+Gaussian sufficient statistics remain valid after the known local/CMB sky is
+subtracted. In case03 the noiseless joint solve is still a prior-dependent CMB
+Wiener/MAP solve, so exact recovery of every amplitude or identically zero
+residuals is not an appropriate acceptance requirement.
+
+```sh
+python3 tests/test_fossil_cmb_parameters.py
+python3 tests/run_fossil_cmb_tests.py
+```
+
+The compiled CMB fixtures exercise the production SI conversions, equivalence
+to the physical DeltaT response, normalized free-free Te derivative, covariance
+and D_ell initialization, exact low-mode CG output, and harmonic/pixel CMB
+preconditioner separation. They use explicit small dependencies and do not
+certify a complete MPI/HEALPix run. Repeat remote CG, residual, prior and
+posterior-mixing checks with the new input package.
+
 ## Progressive MPI runs
+
+The [`examples/fossil/owl64/`](../examples/fossil/owl64/README.md) directory
+contains all static parameter files for a single owl31–35 node, using 64 MPI
+ranks and a resource-limited 64-channel separation/forecast. Use your own
+launcher with these files, or `--band-count 64` in the optional generator and
+acceptance tools. The frequency set is selected by a noise-weighted fiducial
+spectral-information heuristic, including global and Galactic amplitude/shape
+directions, fixed reference channels and coverage constraints. Both the
+map/reference-band IDs and analytic posterior statistics are mapped to the
+selected original frequencies. Per-pixel sensitivity and the original maps do
+not change. Conclusions for the reduced analysis refer to these 64 channels.
+
+The supplied files progressively exercise the global block, local CG amplitudes,
+global spectral shapes, the complete nonlinear model, four independent seeds,
+and global RNG checkpoint continuation. The directory README explains the free
+and fixed quantities and expected evidence for every case. The 131-channel
+configuration remains the default when no band-count option is specified.
 
 Run in a fresh directory on the configured machine. FOSSIL path buffers support
 511 bytes; the generator/remote runner rejects longer resolved input paths.

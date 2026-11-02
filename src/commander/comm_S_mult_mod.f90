@@ -14,17 +14,30 @@ module comm_S_mult_mod
   ! *********************************************************************
 
   integer(i4b),                                private :: lmax, nmaps
+  integer(i4b),                                private :: cmb_min_l=0
   real(dp),     allocatable, dimension(:,:,:), private :: S, sqrt_S, inv_sqrt_S
 
 contains
 
-  subroutine initialize_S_mult_mod(lmax_in, nmaps_in)
+  subroutine initialize_S_mult_mod(lmax_in, nmaps_in, paramfile)
     implicit none
 
     integer(i4b), intent(in) :: lmax_in, nmaps_in
+    character(len=*), intent(in), optional :: paramfile
+    logical :: found
+    integer :: ierr
 
     lmax  = lmax_in
     nmaps = nmaps_in
+    cmb_min_l=0
+    if (present(paramfile)) then
+       call get_parameter(paramfile,'FOSSIL_CMB_MIN_L',par_int=cmb_min_l,par_present=found)
+       if (.not. found) cmb_min_l=0
+    end if
+    if (cmb_min_l/=0 .and. cmb_min_l/=2) then
+       write(*,*) 'FOSSIL_CMB_MIN_L must be 0 (legacy) or 2 (anisotropies only).'
+       call mpi_abort(MPI_COMM_WORLD,1,ierr)
+    end if
 
     allocate(S(nmaps, nmaps, 0:lmax))
     allocate(sqrt_S(nmaps, nmaps, 0:lmax))
@@ -61,7 +74,11 @@ contains
     sqrt_S     = 0.d0
     inv_sqrt_S = 0.d0
     do l = 0, lmax
-       if (l <= 1) then
+       if (l<cmb_min_l) then
+          ! A zero covariance fixes the physical alm exactly to zero after the
+          ! whitened CG solve; no instrumental monopole transfer is performed.
+          S(:,:,l)=0.d0
+       else if (l <= 1) then
           if (any(cls(:,1) /= 0.d0)) then
              S(1,1,l) = 1.d12
              !S(1,1,l) = 0.d0

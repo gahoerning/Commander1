@@ -86,6 +86,8 @@ class Runner:
         np.savetxt(likelihood, rows, header=str(len(rows)), comments="", fmt="%.17e")
         result = subprocess.run([str(self.executable), str(parameters), str(likelihood), mode, str(draws),
                                  str(self.templates), str(seed)], cwd=directory, capture_output=True, text=True)
+        (directory/"driver_stdout.txt").write_text(result.stdout)
+        (directory/"driver_stderr.txt").write_text(result.stderr)
         if error is not None:
             if result.returncode == 0 or error not in result.stdout:
                 raise AssertionError(f"Expected rejection {error!r}:\n{result.stdout}\n{result.stderr}")

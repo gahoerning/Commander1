@@ -7,7 +7,9 @@ program test_fossil_global
   implicit none
   character(len=4096) :: config,likelihood,mode,directory,argument
   real(dp), allocatable :: weight(:),data(:),saved(:),basis(:,:)
-  real(dp) :: nu,amplitude1,amplitude2,determinant,target1,target2,beta,x,amplitude3,error
+  real(dp) :: nu,amplitude1,amplitude2,determinant,target1,target2,beta,x,amplitude3,error,conversion
+  character(len=:), allocatable :: band_tag
+  logical :: found
   type(fossil_sed_table) :: crr
   integer :: unit,draws,i,b,status,seed
   call get_command_argument(1,config)
@@ -22,6 +24,13 @@ program test_fossil_global
   do b=1,numband
      read(unit,*) nu,weight(b),data(b)
      bp(b)%nu_c=nu*1.d9
+     ! Test metadata is independently constructed from the physical SI CMB
+     ! derivative; production global arithmetic uses the supplied bp%f2t.
+     call index2string(b,band_tag)
+     call get_parameter(trim(config),'FREQ_UNIT'//band_tag,par_string=bp(b)%unit,par_present=found)
+     x=6.62607015d-34*bp(b)%nu_c/(1.380649d-23*2.725d0)
+     bp(b)%f2t=1.d-14/(2.d0*(6.62607015d-34)**2*bp(b)%nu_c**4/ &
+          ((299792458.d0)**2*1.380649d-23*(2.725d0)**2)*exp(x)/(exp(x)-1.d0)**2)
   end do
   close(unit)
   call initialize_fossil_globals(trim(config),seed)
@@ -46,6 +55,7 @@ program test_fossil_global
         basis(b,1)=fossil_sed_value('delta_T',bp(b)%nu_c/1.d9,[real(dp)::])
         basis(b,2)=fossil_sed_value('mu',bp(b)%nu_c/1.d9,[real(dp)::])
         basis(b,3)=fossil_sed_value('crr',bp(b)%nu_c/1.d9,[real(dp)::],table=crr)
+        if (trim(bp(b)%unit)=='uK_cmb') basis(b,:)=basis(b,:)*bp(b)%f2t
      end do
      determinant=basis(1,1)*basis(2,2)-basis(2,1)*basis(1,2)
   end if
@@ -59,12 +69,20 @@ program test_fossil_global
         target2=global_signal(2)-amplitude3*basis(2,3)
         amplitude1=(target1*basis(2,2)-target2*basis(1,2))/determinant
         amplitude2=(basis(1,1)*target2-basis(2,1)*target1)/determinant
-        error=maxval(abs(global_signal-amplitude1*basis(:,1)-amplitude2*basis(:,2)-amplitude3*basis(:,3)))
+        error=0.d0
+        do b=1,numband
+           conversion=1.d0
+           if (trim(bp(b)%unit)=='uK_cmb') conversion=bp(b)%f2t
+           error=max(error,abs(global_signal(b)-amplitude1*basis(b,1)-amplitude2*basis(b,2)- &
+                amplitude3*basis(b,3))/conversion)
+        end do
         write(unit,'(3es26.17)') amplitude1,amplitude2,error
      case('shapes')
         call update_fossil_globals(weight,data,.true.)
         x=6.62607015d-34*bp(1)%nu_c/(1.380649d-23*18.8d0)
-        beta=log(global_signal(1)*(exp(x)-1.d0)/0.346d0)/log(x)-3.d0
+        conversion=1.d0
+        if (trim(bp(1)%unit)=='uK_cmb') conversion=bp(1)%f2t
+        beta=log(global_signal(1)/conversion*(exp(x)-1.d0)/0.346d0)/log(x)-3.d0
         write(unit,'(es26.17)') beta
      case('chain')
         call update_fossil_globals(weight,data,.false.)

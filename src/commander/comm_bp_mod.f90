@@ -34,6 +34,7 @@ module comm_bp_mod
   integer(i4b)                                  :: numband
   integer(i4b)                                  :: color_corr_update_interval = 1
   logical                                      :: fossil_exact_mjysr_units = .false.
+  logical                                      :: fossil_si_cmb = .false.
   type(bandinfo),     allocatable, dimension(:) :: bp
   integer(i4b),       allocatable, dimension(:) :: i2f
 
@@ -267,7 +268,7 @@ contains
     type(planck_rng), intent(inout) :: handle
 
     integer(i4b)        :: i, j, q, unit, myid_chain
-    logical(lgt)        :: exist, apply_bp_corr, apply_gain_corr, apply_color_corr, found, polar
+    logical(lgt)        :: exist, apply_bp_corr, apply_gain_corr, apply_color_corr, found, polar, fixed
     real(dp)            :: threshold, gain_init_rms, bp_init_rms, ierr
     character(len=:), allocatable :: i_text
     character(len=512)  :: filename, chaindir, gain_init_file, bp_init_file, MJySr_convention
@@ -282,6 +283,8 @@ contains
     call get_parameter(paramfile,'FOSSIL_EXACT_LOCAL_SEDS', &
          par_lgt=fossil_exact_mjysr_units,par_present=found)
     if (.not. found) fossil_exact_mjysr_units=.false.
+    call get_parameter(paramfile,'FOSSIL_SI_CMB',par_lgt=fossil_si_cmb,par_present=found)
+    if (.not. found) fossil_si_cmb=.false.
     call get_parameter(paramfile, 'CHAIN_DIRECTORY',        par_string=chaindir)
     call get_parameter(paramfile, 'GAIN_INIT',              par_string=gain_init_file, &
          & path=base_path)
@@ -293,6 +296,13 @@ contains
     apply_color_corr = .false.
     call get_parameter(paramfile, 'APPLY_COLOR_CORRECTIONS', par_lgt=apply_color_corr, par_present=found)
     call get_parameter(paramfile, 'POLARIZATION', par_lgt=polar)
+    if (fossil_si_cmb) then
+       if (.not. fossil_exact_mjysr_units .or. polar .or. abs(T_CMB-2.725d0)>1.d-12 .or. &
+            apply_bp_corr .or. apply_gain_corr .or. apply_color_corr) then
+          write(*,*) 'FOSSIL_SI_CMB requires exact local SEDs, T_CMB=2.725, Stokes I, and fixed instrument corrections.'
+          call mpi_abort(MPI_COMM_WORLD,1,q)
+       end if
+    end if
     color_corr_update_interval = 1
     if (apply_color_corr) then
        call get_parameter(paramfile, 'COLOR_CORR_UPDATE_INTERVAL', &
@@ -331,6 +341,24 @@ contains
        call get_parameter(paramfile, 'F2T'                  // i_text, par_dp=bp(i)%f2t)
        call get_parameter(paramfile, 'CO2T'                 // i_text, par_dp=bp(i)%co2t)
        call get_parameter(paramfile, 'A2SZ'                 // i_text, par_dp=bp(i)%a2sz)
+       if (fossil_si_cmb) then
+          if (trim(bp(i)%id)/='delta' .or. &
+               (trim(bp(i)%unit)/='MJy/sr' .and. trim(bp(i)%unit)/='uK_cmb') .or. &
+               bp(i)%gain_rms/=0.d0 .or. bp(i)%a2t>0.d0 .or. bp(i)%f2t>0.d0) then
+             write(*,*) 'FOSSIL_SI_CMB requires delta MJy/sr or uK_cmb bands, fixed gains, and automatic A2T/F2T.'
+             call mpi_abort(MPI_COMM_WORLD,1,q)
+          end if
+          call get_parameter(paramfile,'FIX_MONOPOLE'//i_text,par_lgt=fixed)
+          if (.not. fixed) then
+             write(*,*) 'FOSSIL_SI_CMB requires fixed instrumental monopoles.'
+             call mpi_abort(MPI_COMM_WORLD,1,q)
+          end if
+          call get_parameter(paramfile,'FIX_DIPOLE'//i_text,par_lgt=fixed)
+          if (.not. fixed) then
+             write(*,*) 'FOSSIL_SI_CMB requires fixed instrumental dipoles.'
+             call mpi_abort(MPI_COMM_WORLD,1,q)
+          end if
+       end if
        bp(i)%delta     = 0.d0
        if (apply_bp_corr) then
           call get_parameter(paramfile, 'BP_RMS'         // i_text, par_dp=bp(i)%delta_rms)
@@ -874,8 +902,14 @@ contains
     numband = size(frequencies)
 
     do i = 1, numband
-       x = h*frequencies(i) / (k_B*T_CMB)
-       ant2thermo(i) = (exp(x)-1.d0)**2 / (x**2 * exp(x))
+       if (fossil_si_cmb) then
+          ! Internal RJ units retain the legacy Boltzmann constant. Only the
+          ! physical CMB derivative adopts the SI constants used by FOSSIL.
+          ant2thermo(i)=compute_bnu_prime_RJ_single(frequencies(i))/compute_bnu_prime_single(frequencies(i))
+       else
+          x = h*frequencies(i) / (k_B*T_CMB)
+          ant2thermo(i) = (exp(x)-1.d0)**2 / (x**2 * exp(x))
+       end if
     end do
     
   end subroutine compute_ant2thermo
@@ -888,8 +922,12 @@ contains
 
     real(dp)     :: x
 
-    x = h*frequency / (k_B*T_CMB)
-    compute_ant2thermo_single = (exp(x)-1.d0)**2 / (x**2 * exp(x))
+    if (fossil_si_cmb) then
+       compute_ant2thermo_single=compute_bnu_prime_RJ_single(frequency)/compute_bnu_prime_single(frequency)
+    else
+       x = h*frequency / (k_B*T_CMB)
+       compute_ant2thermo_single = (exp(x)-1.d0)**2 / (x**2 * exp(x))
+    end if
     
   end function compute_ant2thermo_single
 
@@ -903,9 +941,13 @@ contains
     real(dp)     :: x
 
     do i = 1, size(nu)
-       x = h*nu(i) / (k_B*T_CMB)
-       bnu_prime(i) = (2.d0*h*nu(i)**3/(c**2*(exp(x)-1.d0))) * &
-            & (exp(x) / (exp(x)-1.d0)) * h*nu(i)/(k_B*T_CMB**2)
+       if (fossil_si_cmb) then
+          bnu_prime(i)=compute_bnu_prime_single(nu(i))
+       else
+          x = h*nu(i) / (k_B*T_CMB)
+          bnu_prime(i) = (2.d0*h*nu(i)**3/(c**2*(exp(x)-1.d0))) * &
+               & (exp(x) / (exp(x)-1.d0)) * h*nu(i)/(k_B*T_CMB**2)
+       end if
     end do
     
   end subroutine compute_bnu_prime
@@ -918,10 +960,17 @@ contains
 
     integer(i4b) :: i
     real(dp)     :: x
+    real(dp), parameter :: si_h=6.62607015d-34,si_k=1.380649d-23
 
-    x = h*nu / (k_B*T_CMB)
-    compute_bnu_prime_single = (2.d0*h*nu**3/(c**2*(exp(x)-1.d0))) * &
-         & (exp(x) / (exp(x)-1.d0)) * h*nu/(k_B*T_CMB**2)
+    if (fossil_si_cmb) then
+       x = si_h*nu/(si_k*T_CMB)
+       compute_bnu_prime_single=(2.d0*si_h*nu**3/(c**2*(exp(x)-1.d0))) * &
+            (exp(x)/(exp(x)-1.d0))*si_h*nu/(si_k*T_CMB**2)
+    else
+       x = h*nu / (k_B*T_CMB)
+       compute_bnu_prime_single = (2.d0*h*nu**3/(c**2*(exp(x)-1.d0))) * &
+            & (exp(x) / (exp(x)-1.d0)) * h*nu/(k_B*T_CMB**2)
+    end if
     
   end function compute_bnu_prime_single
 

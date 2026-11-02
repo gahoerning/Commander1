@@ -74,11 +74,71 @@ class ParameterTests(unittest.TestCase):
                 if key.startswith("INIT_INDEX_MAP"):
                     self.assertTrue(value.startswith("truth/"))
 
+    def test_64_band_subset_keeps_reference_channels_and_original_maps(self):
+        manifest = fixture_manifest()
+        subset = generator.select_channels(manifest, 64)
+        frequencies = [channel["frequency_GHz"] for channel in subset]
+        self.assertEqual(len(subset), 64)
+        self.assertEqual(len(set(frequencies)), 64)
+        self.assertEqual(frequencies, sorted(frequencies))
+        self.assertEqual(frequencies[0], 50)
+        self.assertEqual(frequencies[-1], 2000)
+        self.assertIn(545, frequencies)
+        counts = [0] * 4
+        for frequency in frequencies:
+            counts[min(3, int((frequency - 50) / ((2000 - 50) / 4)))] += 1
+        self.assertTrue(all(count >= 8 for count in counts))
+        for nside in (64, 128):
+            for stage in generator.STAGES:
+                p = generator.build_parameters(manifest, nside, stage, "input", "chains/subset", band_count=64)
+                self.assertEqual(p["NUMBAND"], 64)
+                self.assertEqual(p["NUM_PROC_PER_BAND"], 1)
+                self.assertEqual(p["NUM_GROUPS"], 1)
+                self.assertEqual(len([key for key in p if re.fullmatch(r"MAP\d+_0001", key)]), 64)
+                self.assertNotIn("FREQ_C65", p)
+                for i, source in enumerate(subset, 1):
+                    suffix = generator.band_suffix(i)
+                    self.assertEqual(p["FREQ_C" + suffix], source["frequency_GHz"])
+                    kind = "observed" if generator.STAGES[stage]["observed"] else "signal"
+                    self.assertEqual(p[f"MAP{suffix}_0001"], f"maps/{kind}_{source['band']:03d}.fits")
+                    self.assertEqual(p["NOISE_RMS" + suffix], f"maps/sigma_{source['band']:03d}.fits")
+                for i in range(1, 6):
+                    suffix = generator.band_suffix(i)
+                    reference = generator.band_suffix(p["REFERENCE_BAND" + suffix])
+                    self.assertEqual(p["FREQ_C" + reference], p["REFERENCE_FREQUENCY" + suffix])
+
+    def test_invalid_band_selection_fails(self):
+        for count in (0, 63, 65, 132):
+            with self.assertRaises(ValueError):
+                generator.select_channels(fixture_manifest(), count)
+        manifest = fixture_manifest()
+        manifest["resolutions"]["64"]["components"][0]["reference_band"] = 33
+        with self.assertRaises(ValueError):
+            generator.select_channels(manifest, 64)
+
+    def test_native_pixel_window_paths_and_implicit_cwd_dependency(self):
+        manifest = fixture_manifest()
+        for nside in (64, 128):
+            filename = f"pixel_window_n{nside:04d}.fits"
+            manifest["resolutions"][str(nside)]["pixel_window"] = filename
+            for band_count in (64, 131):
+                p = generator.build_parameters(manifest, nside, "globals_optimize", "input", "chains/test",
+                                               band_count=band_count)
+                self.assertEqual(p["PIXEL_WINDOW"], filename)
+                text = generator.render(p, "globals_optimize", nside)
+                self.assertIn(f"Legacy read_pixwin also needs {filename} in the process working directory.", text)
+                self.assertIn("ell = 0 through 4 * NSIDE", text)
+
     def test_release_sequence_and_sample_semantics(self):
         p = self.parameters("amplitudes_sample")
         self.assertTrue(p["SAMPLE_AMPLITUDES01"])
         self.assertEqual(p["EMISSIVITY_PRIOR_GAUSSIAN_STDDEV01"], 0)
         self.assertFalse(p["GLOBAL_SAMPLE_PARAM03_01"])
+        p = self.parameters("amplitudes_optimize")
+        self.assertEqual(p["OPERATION"], "optimize")
+        self.assertTrue(p["SAMPLE_AMPLITUDES01"])
+        self.assertFalse(p["GLOBAL_SAMPLE_PARAM03_01"])
+        self.assertEqual(p["EMISSIVITY_PRIOR_GAUSSIAN_STDDEV01"], 0)
         p = self.parameters("forecast_sample")
         self.assertGreater(p["EMISSIVITY_PRIOR_GAUSSIAN_STDDEV01"], 0)
         self.assertGreater(p["FREQUENCY_PRIOR_GAUSSIAN_STDDEV04"], 0)
@@ -101,7 +161,8 @@ class ParameterTests(unittest.TestCase):
                  "comm_beam_mod", "comm_Cl_util_mod", "comm_fg_mod", "comm_cgd_mod",
                  "comm_cgd_precond_mod", "comm_genvec_mod", "comm_chisq_mod",
                  "comm_fg_component_mod", "comm_Cl_sampling_mod", "comm_signal_mod"]
-        conditional = {"INV_N_DENSE_ORDERING", "COLOR_CORR_UPDATE_INTERVAL"}
+        conditional = {"INV_N_DENSE_ORDERING", "COLOR_CORR_UPDATE_INTERVAL",
+                       "FOSSIL_SI_CMB", "FOSSIL_CMB_MIN_L"}
         required = set()
         for name in files:
             source = (ROOT / f"src/commander/{name}.f90").read_text()

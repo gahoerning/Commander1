@@ -287,9 +287,11 @@ contains
        do k = 1, num_fg_signal
           if (fg_components(k)%enforce_positive_amplitude) cycle
           if ((num_global_components>0 .or. fossil_exact_local_seds) .and. .not. fg_components(k)%sample_amplitudes) cycle
+          if (fossil_exact_local_seds .and. .not. enforce_zero_cl .and. trim(fg_components(k)%type)=='cmb') cycle
           do l = 1, num_fg_signal
              if (fg_components(l)%enforce_positive_amplitude) cycle
              if ((num_global_components>0 .or. fossil_exact_local_seds) .and. .not. fg_components(l)%sample_amplitudes) cycle
+             if (fossil_exact_local_seds .and. .not. enforce_zero_cl .and. trim(fg_components(l)%type)=='cmb') cycle
              do i = 0, map_size-1
                 call get_inv_N_sub_matrix(map_id, mask_state, i, inv_N)
                 do j = 1, nmaps

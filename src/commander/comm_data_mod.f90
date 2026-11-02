@@ -492,7 +492,7 @@ contains
     real(dp)     :: avg
     complex(dpc), allocatable, dimension(:,:,:) :: alms
     real(dp),     allocatable, dimension(:,:)   :: gb, map
-    real(dp),     pointer,     dimension(:,:), save   :: pixwin
+    real(dp),     pointer,     dimension(:,:), save   :: pixwin => null()
 
     residuals_lowres = cmbmaps_lowres
 
@@ -546,7 +546,7 @@ contains
     real(dp)     :: avg
     complex(dpc), allocatable, dimension(:,:,:) :: alms
     real(dp),     allocatable, dimension(:,:)   :: gb, map
-    real(dp),     pointer,     dimension(:,:), save   :: pixwin
+    real(dp),     pointer,     dimension(:,:), save   :: pixwin => null()
 
     ! Check if we have a CMB component
     do comp = 1, num_fg_comp

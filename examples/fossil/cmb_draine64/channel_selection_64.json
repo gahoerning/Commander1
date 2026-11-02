@@ -1,0 +1,861 @@
+{
+  "schema_version": 1,
+  "band_count": 64,
+  "original_channel_count": 131,
+  "original_commander_bands": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    26,
+    27,
+    28,
+    32,
+    33,
+    34,
+    36,
+    37,
+    42,
+    43,
+    44,
+    45,
+    46,
+    54,
+    55,
+    56,
+    57,
+    58,
+    68,
+    69,
+    70,
+    71,
+    72,
+    84,
+    85,
+    86,
+    87,
+    88,
+    100,
+    101,
+    102,
+    103,
+    111,
+    112,
+    113,
+    121,
+    122,
+    123,
+    124,
+    129,
+    130,
+    131
+  ],
+  "original_bands_zero_based": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    25,
+    26,
+    27,
+    31,
+    32,
+    33,
+    35,
+    36,
+    41,
+    42,
+    43,
+    44,
+    45,
+    53,
+    54,
+    55,
+    56,
+    57,
+    67,
+    68,
+    69,
+    70,
+    71,
+    83,
+    84,
+    85,
+    86,
+    87,
+    99,
+    100,
+    101,
+    102,
+    110,
+    111,
+    112,
+    120,
+    121,
+    122,
+    123,
+    128,
+    129,
+    130
+  ],
+  "frequencies_GHz": [
+    50.0,
+    65.0,
+    80.0,
+    95.0,
+    110.0,
+    125.0,
+    140.0,
+    155.0,
+    170.0,
+    185.0,
+    200.0,
+    215.0,
+    230.0,
+    245.0,
+    260.0,
+    305.0,
+    320.0,
+    335.0,
+    350.0,
+    365.0,
+    380.0,
+    395.0,
+    425.0,
+    440.0,
+    455.0,
+    515.0,
+    530.0,
+    545.0,
+    575.0,
+    590.0,
+    665.0,
+    680.0,
+    695.0,
+    710.0,
+    725.0,
+    845.0,
+    860.0,
+    875.0,
+    890.0,
+    905.0,
+    1055.0,
+    1070.0,
+    1085.0,
+    1100.0,
+    1115.0,
+    1295.0,
+    1310.0,
+    1325.0,
+    1340.0,
+    1355.0,
+    1535.0,
+    1550.0,
+    1565.0,
+    1580.0,
+    1700.0,
+    1715.0,
+    1730.0,
+    1850.0,
+    1865.0,
+    1880.0,
+    1895.0,
+    1970.0,
+    1985.0,
+    2000.0
+  ],
+  "method": "noise_weighted_backward_greedy_d_optimal_fiducial_spectral_jacobian",
+  "source_manifest_signature": "cff28d9447fc29b5fb69d1fb84e8c223943a0c04e874e17ff24697ab87090fdc",
+  "source_files_sha256": {
+    "manifest.json": "a0498453c0bef1b97cf29eeaa095900610c533aac22297fa1eeb78b2d77a23a3",
+    "global_response.csv": "4feac14b638f930d30d2a561a90b1482d27d9cf135dd2c949fa3e7fd69d122d1",
+    "local_response.csv": "9d13237860fa0a64b2bfb8ac3e2f03e6da0b42ded39192599a8f9c6ac1e17816"
+  },
+  "source_simulation_sha256": "842a762835855696b8a9d65a08b831fb5c84f7d429d1470ba1a25c1488bac606",
+  "anchors_GHz": [
+    50.0,
+    545.0,
+    2000.0
+  ],
+  "coverage": {
+    "interval_edges_GHz": [
+      50.0,
+      537.5,
+      1025.0,
+      1512.5,
+      2000.0
+    ],
+    "minimum_channels_per_interval": 8,
+    "selected_channels_per_interval": [
+      27,
+      13,
+      10,
+      14
+    ],
+    "maximum_adjacent_gap_GHz": 180.0
+  },
+  "noise_convention": "Use the unchanged manifest sigma_MJy_sr per pixel for each retained channel; no time or noise redistribution.",
+  "parameter_basis": {
+    "feature_names": [
+      "global_delta_t",
+      "global_mu",
+      "global_y",
+      "global_cib",
+      "global_crr",
+      "global_co",
+      "global_kTe_keV",
+      "global_cib_beta",
+      "global_cib_temperature_K",
+      "local_dust",
+      "local_synch",
+      "local_freefree",
+      "local_ame1",
+      "local_ame2",
+      "local_cmb",
+      "local_dust_beta",
+      "local_dust_temperature",
+      "local_synch_beta",
+      "local_freefree_temperature",
+      "local_ame1_peak",
+      "local_ame2_peak"
+    ],
+    "feature_count": 21,
+    "identifiable_rank": 20,
+    "svd_relative_tolerance": 1e-10,
+    "normalized_singular_values": [
+      2.955555549341636,
+      2.14906539584232,
+      1.7050093590244182,
+      1.3345262301086225,
+      1.206116909140222,
+      1.0288789963322758,
+      0.5714436999930045,
+      0.23289693889153068,
+      0.19321134033621612,
+      0.140602283615749,
+      0.07989568220329157,
+      0.02148332651119936,
+      0.012076763542302771,
+      0.0016036691953469101,
+      0.0005842701990240822,
+      0.00017655472589674185,
+      4.2095228506588525e-05,
+      9.61829670845434e-06,
+      4.6677061346008547e-07,
+      1.6739067638517265e-07,
+      1.493646115100089e-16
+    ],
+    "normalized_jacobian_condition_number": 17656631.857683547,
+    "noise_weighted_column_norms": {
+      "global_delta_t": 6338239829.266721,
+      "global_mu": 1726768756.234239,
+      "global_y": 13835737295.236685,
+      "global_cib": 43725073.9380075,
+      "global_crr": 7.563897910341734,
+      "global_co": 4297.155748633336,
+      "global_kTe_keV": 396.8141846862297,
+      "global_cib_beta": 18121935.853284303,
+      "global_cib_temperature_K": 759618.4632394926,
+      "local_dust": 87262046.21286821,
+      "local_synch": 1850108.218588639,
+      "local_freefree": 10727545.37153761,
+      "local_ame1": 696454.4637622689,
+      "local_ame2": 708731.7761248092,
+      "local_cmb": 32290555.285440743,
+      "local_dust_beta": 89400350.81220955,
+      "local_dust_temperature": 7570247.88977452,
+      "local_synch_beta": 3201831.913160177,
+      "local_freefree_temperature": 77.38880586097775,
+      "local_ame1_peak": 10828.106383827471,
+      "local_ame2_peak": 14331.779578808335
+    },
+    "finite_difference_checks": {
+      "global_kTe_keV": {
+        "step": 6.225000000000001e-05,
+        "half_step_relative_change": 7.197325013459758e-11
+      },
+      "global_cib_beta": {
+        "step": 5e-05,
+        "half_step_relative_change": 3.5252819383656473e-12
+      },
+      "global_cib_temperature_K": {
+        "step": 0.0009400000000000001,
+        "half_step_relative_change": 2.688434891215591e-12
+      }
+    },
+    "feature_source": "manifest.channel_selection_features",
+    "null_direction_count": 1,
+    "condition_number_scope": "Retained identifiable SVD span; discarded null directions are not regularized",
+    "exact_spectral_duplicate_pairs": [
+      [
+        "global_delta_t",
+        "local_cmb"
+      ]
+    ],
+    "declared_local_amplitudes": [
+      "dust",
+      "synch",
+      "freefree",
+      "ame1",
+      "ame2",
+      "cmb"
+    ],
+    "declared_local_shapes": [
+      "dust_beta",
+      "dust_temperature",
+      "synch_beta",
+      "freefree_temperature",
+      "ame1_peak",
+      "ame2_peak"
+    ]
+  },
+  "fixed_parameters_omitted": [
+    "local_synch_curvature"
+  ],
+  "diagnostics": {
+    "log_determinant_relative_to_all_131": -7.635602037533531,
+    "geometric_mean_information_fraction": 0.6826451490890643,
+    "information_fraction_eigenvalues": [
+      0.3012283009599641,
+      0.31750112828980126,
+      0.33167267156030217,
+      0.3747822836201215,
+      0.4198129226998557,
+      0.49455900496057326,
+      0.5479561313677751,
+      0.6792530603232929,
+      0.7184158631358425,
+      0.8102423047629176,
+      0.9276433719404513,
+      0.9748105915817772,
+      0.9987253063267121,
+      0.9999560689546242,
+      0.9999999585196233,
+      0.9999999998004092,
+      0.9999999999971583,
+      0.9999999999999986,
+      0.999999999999999,
+      1.0000000000000009
+    ],
+    "minimum_information_fraction": 0.3012283009599641,
+    "maximum_spectral_direction_std_inflation": 1.822015695781753,
+    "whitened_information_condition_number": 3.319741195675069,
+    "feature_direct_information_fractions": {
+      "global_delta_t": 0.9055832451246627,
+      "global_mu": 0.8833558065260996,
+      "global_y": 0.7917759446103338,
+      "global_cib": 0.35858438369011203,
+      "global_crr": 0.6215792224100964,
+      "global_co": 0.9941857132250382,
+      "global_kTe_keV": 0.774961464462577,
+      "global_cib_beta": 0.3501355242723052,
+      "global_cib_temperature_K": 0.4422596640882912,
+      "local_dust": 0.3595853551148578,
+      "local_synch": 0.8411684983021729,
+      "local_freefree": 0.549980949524272,
+      "local_ame1": 0.9999999999844392,
+      "local_ame2": 0.9999999999470146,
+      "local_cmb": 0.9055832451246629,
+      "local_dust_beta": 0.37506773800896887,
+      "local_dust_temperature": 0.39278300651612347,
+      "local_synch_beta": 0.6452139240187207,
+      "local_freefree_temperature": 0.48177230626060047,
+      "local_ame1_peak": 0.9999999975820533,
+      "local_ame2_peak": 0.9999999956189212
+    },
+    "spectral_proxy_marginal_std_inflations": {
+      "global_delta_t": 1.0809809998583026,
+      "global_mu": 1.074839455881884,
+      "global_y": 1.1739630708417692,
+      "global_cib": 1.141073832564983,
+      "global_crr": 1.1460109333316137,
+      "global_co": 1.0836728361994383,
+      "global_kTe_keV": 1.227669151304996,
+      "global_cib_beta": 1.21784915448348,
+      "global_cib_temperature_K": 1.2190608454703573,
+      "local_dust": 1.1542502829194126,
+      "local_synch": 1.043671996628205,
+      "local_freefree": 1.043707260234108,
+      "local_ame1": 1.0048288182539529,
+      "local_ame2": 1.0001089318575442,
+      "local_cmb": 1.0809809536288586,
+      "local_dust_beta": 1.1501735635029804,
+      "local_dust_temperature": 1.1345498301151322,
+      "local_synch_beta": 1.0441005252330657,
+      "local_freefree_temperature": 1.043196523083632,
+      "local_ame1_peak": 1.02537224254671,
+      "local_ame2_peak": 1.0468677657881458
+    },
+    "uniform_anchored_comparison": {
+      "log_determinant_relative_to_all_131": -47.29205343304003,
+      "geometric_mean_information_fraction": 0.09398663650565188,
+      "information_fraction_eigenvalues": [
+        4.5025744589428584e-11,
+        7.467767883839393e-06,
+        0.1450565527362823,
+        0.35029039244265125,
+        0.4603276674900193,
+        0.4688611822189227,
+        0.4755254296040714,
+        0.4913467057835564,
+        0.4976905649411641,
+        0.4997937621269539,
+        0.4999570874865223,
+        0.500060079125263,
+        0.500155562375564,
+        0.5005377732144793,
+        0.5125661829715265,
+        0.6111535027382475,
+        0.6886048369067034,
+        0.9998026298503881,
+        0.9999999981142454,
+        0.999999999998753
+      ],
+      "minimum_information_fraction": 4.5025744589428584e-11,
+      "maximum_spectral_direction_std_inflation": 149028.57482347617,
+      "whitened_information_condition_number": 22209516113.88874,
+      "feature_direct_information_fractions": {
+        "global_delta_t": 0.5281130044770385,
+        "global_mu": 0.5279382826292454,
+        "global_y": 0.5104098813939065,
+        "global_cib": 0.48649125988991515,
+        "global_crr": 0.4933343312411451,
+        "global_co": 0.50146618174686,
+        "global_kTe_keV": 0.5160351032868493,
+        "global_cib_beta": 0.4877068454713752,
+        "global_cib_temperature_K": 0.4892396760034502,
+        "local_dust": 0.48874135385289974,
+        "local_synch": 0.5469461246315601,
+        "local_freefree": 0.4973624790456081,
+        "local_ame1": 0.93477542839198,
+        "local_ame2": 0.9062593003070741,
+        "local_cmb": 0.5281130044770387,
+        "local_dust_beta": 0.49136309593801414,
+        "local_dust_temperature": 0.49385667599090366,
+        "local_synch_beta": 0.5024704762838751,
+        "local_freefree_temperature": 0.49249780558820155,
+        "local_ame1_peak": 0.12137130034501775,
+        "local_ame2_peak": 0.1564772603129082
+      },
+      "spectral_proxy_marginal_std_inflations": {
+        "global_delta_t": 8.825730723381804,
+        "global_mu": 9.262386710815713,
+        "global_y": 6.857279232965764,
+        "global_cib": 6.144487374537089,
+        "global_crr": 1.5993011326182922,
+        "global_co": 3.679584085763242,
+        "global_kTe_keV": 3.042340615677345,
+        "global_cib_beta": 4.413349528670124,
+        "global_cib_temperature_K": 10.47458034939598,
+        "local_dust": 5.731107515936846,
+        "local_synch": 7.296523636530844,
+        "local_freefree": 7.196595803052349,
+        "local_ame1": 662.789243447944,
+        "local_ame2": 627.4535398643869,
+        "local_cmb": 8.825731107139447,
+        "local_dust_beta": 5.6416866465423485,
+        "local_dust_temperature": 5.55725134259097,
+        "local_synch_beta": 6.885058203157372,
+        "local_freefree_temperature": 7.292133009956935,
+        "local_ame1_peak": 525.6179198014653,
+        "local_ame2_peak": 828.4485581031448
+      }
+    },
+    "d_efficiency_ratio_to_uniform_anchored": 7.263215010870331
+  },
+  "removed_channels_in_order": [
+    {
+      "original_band": 93,
+      "frequency_GHz": 1445.0,
+      "determinant_ratio": 0.943536405010593
+    },
+    {
+      "original_band": 79,
+      "frequency_GHz": 1235.0,
+      "determinant_ratio": 0.9428700962563283
+    },
+    {
+      "original_band": 92,
+      "frequency_GHz": 1430.0,
+      "determinant_ratio": 0.9396751694627278
+    },
+    {
+      "original_band": 78,
+      "frequency_GHz": 1220.0,
+      "determinant_ratio": 0.9387080529600028
+    },
+    {
+      "original_band": 94,
+      "frequency_GHz": 1460.0,
+      "determinant_ratio": 0.9356244181578315
+    },
+    {
+      "original_band": 62,
+      "frequency_GHz": 980.0,
+      "determinant_ratio": 0.9353925832792018
+    },
+    {
+      "original_band": 107,
+      "frequency_GHz": 1655.0,
+      "determinant_ratio": 0.9350596564367456
+    },
+    {
+      "original_band": 80,
+      "frequency_GHz": 1250.0,
+      "determinant_ratio": 0.9340830859121533
+    },
+    {
+      "original_band": 106,
+      "frequency_GHz": 1640.0,
+      "determinant_ratio": 0.9303198043679777
+    },
+    {
+      "original_band": 61,
+      "frequency_GHz": 965.0,
+      "determinant_ratio": 0.9300584458500769
+    },
+    {
+      "original_band": 77,
+      "frequency_GHz": 1205.0,
+      "determinant_ratio": 0.9297296243136294
+    },
+    {
+      "original_band": 95,
+      "frequency_GHz": 1475.0,
+      "determinant_ratio": 0.9285902274738598
+    },
+    {
+      "original_band": 115,
+      "frequency_GHz": 1775.0,
+      "determinant_ratio": 0.9275152006419782
+    },
+    {
+      "original_band": 63,
+      "frequency_GHz": 995.0,
+      "determinant_ratio": 0.9251052255162755
+    },
+    {
+      "original_band": 76,
+      "frequency_GHz": 1190.0,
+      "determinant_ratio": 0.9239648853014791
+    },
+    {
+      "original_band": 91,
+      "frequency_GHz": 1415.0,
+      "determinant_ratio": 0.923193588449892
+    },
+    {
+      "original_band": 50,
+      "frequency_GHz": 800.0,
+      "determinant_ratio": 0.922690341303651
+    },
+    {
+      "original_band": 108,
+      "frequency_GHz": 1670.0,
+      "determinant_ratio": 0.9215746924794846
+    },
+    {
+      "original_band": 116,
+      "frequency_GHz": 1790.0,
+      "determinant_ratio": 0.9192619928797807
+    },
+    {
+      "original_band": 74,
+      "frequency_GHz": 1160.0,
+      "determinant_ratio": 0.9172343146471366
+    },
+    {
+      "original_band": 60,
+      "frequency_GHz": 950.0,
+      "determinant_ratio": 0.9160652028583185
+    },
+    {
+      "original_band": 96,
+      "frequency_GHz": 1490.0,
+      "determinant_ratio": 0.9159524879003899
+    },
+    {
+      "original_band": 49,
+      "frequency_GHz": 785.0,
+      "determinant_ratio": 0.9151619647566221
+    },
+    {
+      "original_band": 105,
+      "frequency_GHz": 1625.0,
+      "determinant_ratio": 0.9115537656623071
+    },
+    {
+      "original_band": 117,
+      "frequency_GHz": 1805.0,
+      "determinant_ratio": 0.9104908734434334
+    },
+    {
+      "original_band": 81,
+      "frequency_GHz": 1265.0,
+      "determinant_ratio": 0.910415239452091
+    },
+    {
+      "original_band": 64,
+      "frequency_GHz": 1010.0,
+      "determinant_ratio": 0.9091232874019528
+    },
+    {
+      "original_band": 48,
+      "frequency_GHz": 770.0,
+      "determinant_ratio": 0.9055726732944623
+    },
+    {
+      "original_band": 90,
+      "frequency_GHz": 1400.0,
+      "determinant_ratio": 0.9043593241769431
+    },
+    {
+      "original_band": 39,
+      "frequency_GHz": 635.0,
+      "determinant_ratio": 0.9022584692329566
+    },
+    {
+      "original_band": 73,
+      "frequency_GHz": 1145.0,
+      "determinant_ratio": 0.9010921850115444
+    },
+    {
+      "original_band": 125,
+      "frequency_GHz": 1925.0,
+      "determinant_ratio": 0.9009271820785123
+    },
+    {
+      "original_band": 104,
+      "frequency_GHz": 1610.0,
+      "determinant_ratio": 0.9000950483483807
+    },
+    {
+      "original_band": 114,
+      "frequency_GHz": 1760.0,
+      "determinant_ratio": 0.8973689710405868
+    },
+    {
+      "original_band": 59,
+      "frequency_GHz": 935.0,
+      "determinant_ratio": 0.8966227145949835
+    },
+    {
+      "original_band": 16,
+      "frequency_GHz": 290.0,
+      "determinant_ratio": 0.8957072439982947
+    },
+    {
+      "original_band": 51,
+      "frequency_GHz": 815.0,
+      "determinant_ratio": 0.8914126491778346
+    },
+    {
+      "original_band": 97,
+      "frequency_GHz": 1505.0,
+      "determinant_ratio": 0.8902862578878399
+    },
+    {
+      "original_band": 38,
+      "frequency_GHz": 620.0,
+      "determinant_ratio": 0.889281197201643
+    },
+    {
+      "original_band": 75,
+      "frequency_GHz": 1175.0,
+      "determinant_ratio": 0.8889064033192784
+    },
+    {
+      "original_band": 126,
+      "frequency_GHz": 1940.0,
+      "determinant_ratio": 0.8884462593424705
+    },
+    {
+      "original_band": 118,
+      "frequency_GHz": 1820.0,
+      "determinant_ratio": 0.884133400457978
+    },
+    {
+      "original_band": 89,
+      "frequency_GHz": 1385.0,
+      "determinant_ratio": 0.8837303812967169
+    },
+    {
+      "original_band": 65,
+      "frequency_GHz": 1025.0,
+      "determinant_ratio": 0.8820225214812369
+    },
+    {
+      "original_band": 47,
+      "frequency_GHz": 755.0,
+      "determinant_ratio": 0.8806145679163376
+    },
+    {
+      "original_band": 30,
+      "frequency_GHz": 500.0,
+      "determinant_ratio": 0.8766741993360545
+    },
+    {
+      "original_band": 109,
+      "frequency_GHz": 1685.0,
+      "determinant_ratio": 0.8764748167753766
+    },
+    {
+      "original_band": 40,
+      "frequency_GHz": 650.0,
+      "determinant_ratio": 0.8721699499440342
+    },
+    {
+      "original_band": 82,
+      "frequency_GHz": 1280.0,
+      "determinant_ratio": 0.8703743720275164
+    },
+    {
+      "original_band": 98,
+      "frequency_GHz": 1520.0,
+      "determinant_ratio": 0.8654617657665968
+    },
+    {
+      "original_band": 58,
+      "frequency_GHz": 920.0,
+      "determinant_ratio": 0.8649738862264826
+    },
+    {
+      "original_band": 15,
+      "frequency_GHz": 275.0,
+      "determinant_ratio": 0.8635919112909898
+    },
+    {
+      "original_band": 124,
+      "frequency_GHz": 1910.0,
+      "determinant_ratio": 0.8613154511795899
+    },
+    {
+      "original_band": 72,
+      "frequency_GHz": 1130.0,
+      "determinant_ratio": 0.8591136888684364
+    },
+    {
+      "original_band": 34,
+      "frequency_GHz": 560.0,
+      "determinant_ratio": 0.8580086445790406
+    },
+    {
+      "original_band": 113,
+      "frequency_GHz": 1745.0,
+      "determinant_ratio": 0.8563025780167641
+    },
+    {
+      "original_band": 28,
+      "frequency_GHz": 470.0,
+      "determinant_ratio": 0.8524857270631128
+    },
+    {
+      "original_band": 46,
+      "frequency_GHz": 740.0,
+      "determinant_ratio": 0.8509420982378311
+    },
+    {
+      "original_band": 127,
+      "frequency_GHz": 1955.0,
+      "determinant_ratio": 0.8450122086005238
+    },
+    {
+      "original_band": 88,
+      "frequency_GHz": 1370.0,
+      "determinant_ratio": 0.8429294224722462
+    },
+    {
+      "original_band": 66,
+      "frequency_GHz": 1040.0,
+      "determinant_ratio": 0.8403003126907951
+    },
+    {
+      "original_band": 103,
+      "frequency_GHz": 1595.0,
+      "determinant_ratio": 0.839979684273328
+    },
+    {
+      "original_band": 52,
+      "frequency_GHz": 830.0,
+      "determinant_ratio": 0.8394335507437284
+    },
+    {
+      "original_band": 37,
+      "frequency_GHz": 605.0,
+      "determinant_ratio": 0.8379445754303972
+    },
+    {
+      "original_band": 119,
+      "frequency_GHz": 1835.0,
+      "determinant_ratio": 0.8305348367643195
+    },
+    {
+      "original_band": 29,
+      "frequency_GHz": 485.0,
+      "determinant_ratio": 0.8259406686883846
+    },
+    {
+      "original_band": 24,
+      "frequency_GHz": 410.0,
+      "determinant_ratio": 0.8199688126736149
+    }
+  ],
+  "interpretation": [
+    "The objective retains the determinant on the 20-dimensional identifiable span of a 21-column fiducial spectral information proxy after SVD whitening.",
+    "Each channel contributes a Jacobian row divided by its existing per-pixel MJy/sr sensitivity.",
+    "Local shape columns use unit reference amplitudes; each nonzero column is normalized before the SVD. Global shape columns include the fiducial physical amplitudes.",
+    "The CRR spectral template is explicitly included, so its frequency structure participates in every removal decision.",
+    "The 50 and 545 GHz amplitude-reference bands and the 2000 GHz endpoint are retained exactly.",
+    "At least eight channels remain in each of four equal-frequency intervals; this limits clustering around a few spectral features.",
+    "This is a deterministic backward greedy heuristic for the declared fiducial model and current free parameters, not a globally optimal experimental design.",
+    "The spectral proxy does not include pixel morphology, local spectral-parameter priors, masking correlations, nonlinear posterior geometry or model mismatch. Its marginal error ratios are not spatial posterior forecasts.",
+    "The per-pixel sensitivity convention is the same at NSIDE 128 and 64. An overall pixel-count factor does not change this spectral ranking.",
+    "No map, sensitivity, original channel ID or export manifest is changed. Parameter files remap the selected original IDs to contiguous analysis IDs.",
+    "The primary CMB anisotropy amplitude and global DeltaT have exactly the same SED. No artificial spectral distinction is introduced; their common spectral direction is counted once by the SVD.",
+    "Spatial morphology and the CMB harmonic prior supply information beyond this spectral design proxy. They must be included by the actual spatial component-separation model.",
+    "For a rank-deficient feature basis, spectral_proxy_marginal_std_inflations describe minimum-norm coordinates projected onto the identifiable spectral span. They are not finite unconstrained uncertainties for the original degenerate parameters.",
+    "Free-free uses the Draine Gaunt-factor amplitude-plus-electron-temperature response declared by the export, rather than a free power-law index."
+  ],
+  "source_extension_files_sha256": {
+    "fossil_physical.py": "f8369e8fc25b5a8e960ef6b65431e816cf087050136015ef59b2fe92a3df60ae",
+    "fossil_cmb.py": "3168122fcd056ebad09989fc7f5c8c2c2d93d080db9cb69e66e72b7e02c85eed",
+    "fossil_freefree.py": "25e61ae85a90adf56bb23a61c6c051aa99d484c10a124e2d08da0792e3840d6b"
+  },
+  "selected_original_ids_sha256": "580a46e50f1b3b19ed7fc40d1ed42036522850d146b099a70553266cb574d9d0"
+}

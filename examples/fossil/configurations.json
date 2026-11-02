@@ -1,6 +1,6 @@
 [
   {
-    "file": "fossil_nside128_forecast_sample.par",
+    "file": "fossil_nside128_forecast_sample.txt",
     "stage": "forecast_sample",
     "nside": 128,
     "operation": "sample",
@@ -8,10 +8,12 @@
     "input_directory": "outputs/commander",
     "manifest_signature": "1c51c281053c41a6596ef2ed1840e7365d5dcd9e40f02a04cf70f367e601e356",
     "mpi_ranks": 131,
-    "iterations": 10000
+    "iterations": 10000,
+    "pixel_window": "pixel_window_n0128.fits",
+    "sha256": "0a7778a2b0a0371b152da9e8f5d04dff695e5431da0d93453843ec7a3e16b6b2"
   },
   {
-    "file": "fossil_nside64_forecast_sample.par",
+    "file": "fossil_nside64_forecast_sample.txt",
     "stage": "forecast_sample",
     "nside": 64,
     "operation": "sample",
@@ -19,6 +21,8 @@
     "input_directory": "outputs/commander",
     "manifest_signature": "1c51c281053c41a6596ef2ed1840e7365d5dcd9e40f02a04cf70f367e601e356",
     "mpi_ranks": 131,
-    "iterations": 10000
+    "iterations": 10000,
+    "pixel_window": "pixel_window_n0064.fits",
+    "sha256": "646fd48ebf63bc25df053f6f72c91c7ac246f08bfe2b0c8af8e2ab084add2a6f"
   }
 ]

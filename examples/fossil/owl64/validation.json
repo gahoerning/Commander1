@@ -1,0 +1,92 @@
+{
+  "status": "passed",
+  "referenced_map_rms_pairs_checked": 1664,
+  "distinct_rms_maps_checked": 128,
+  "all_rms_values_match_unchanged_manifest_sigma": true,
+  "mpi_ranks_per_run": 64,
+  "reference_frequency_GHz": {
+    "dust": 545,
+    "other_local_components": 50
+  },
+  "active_dust_reference_band": 29,
+  "restart_pair_model_and_seed_equivalence": true,
+  "manifest_signature": "1c51c281053c41a6596ef2ed1840e7365d5dcd9e40f02a04cf70f367e601e356",
+  "selection_profile_sha256": "5dcb615c8907700cc6694465e2ffa237a05c4da691f053507511af76a5421403",
+  "commander_or_mpi_executed": false,
+  "selection_profile_copy_exact": true,
+  "selected_channels": 64,
+  "removed_channels": 67,
+  "selected_removed_exact_partition_of_131": true,
+  "all_local_channel_record_links_valid": true,
+  "static_parameter_files": 26,
+  "parameter_extension": ".txt",
+  "legacy_par_files_present": 0,
+  "all_parameter_files_linked_in_readme": true,
+  "readable_sections_per_file": 12,
+  "aligned_parameter_value_columns": true,
+  "inline_English_comments": true,
+  "verbosity": 3,
+  "parameter_dictionary_comparison": "All 26 match the previous readable suite except PIXEL_WINDOW: native full-length HEALPix filenames",
+  "scientific_settings_seeds_and_dependencies_unchanged": true,
+  "sole_runtime_setting_change": {
+    "key": "PIXEL_WINDOW",
+    "previous": {
+      "64": "nside64/pixel_window.fits",
+      "128": "nside128/pixel_window.fits"
+    },
+    "current": {
+      "64": "pixel_window_n0064.fits",
+      "128": "pixel_window_n0128.fits"
+    }
+  },
+  "all_parameter_file_hashes_refreshed": true,
+  "remote_parameter_directory": "/mn/stornext/d23/cmbco/AST9240/2024/gabrieah/fossil_component_separation/fossil_inputs",
+  "remote_parameter_files_directly_in_fossil_inputs": true,
+  "remote_transfer_verified": false,
+  "parameter_assignments_compared": 46208,
+  "deployment_filter": "rsync_parameters.rules",
+  "deployment_filter_allowlist_exact": true,
+  "deployment_allowed_old_parameter_names": 26,
+  "deployment_allowed_new_parameter_names": 26,
+  "native_pixel_windows": {
+    "64": {
+      "file": "pixel_window_n0064.fits",
+      "rows": 257,
+      "columns": [
+        "TEMPERATURE",
+        "POLARIZATION"
+      ],
+      "sha256": "5b4bac84881cb242778ac3ec7d6023eb90a07a9747281ccb4e1cd1ee93f91693",
+      "matches_original_native_file": true,
+      "matches_previous_temperature_window_through_LMAX": true
+    },
+    "128": {
+      "file": "pixel_window_n0128.fits",
+      "rows": 513,
+      "columns": [
+        "TEMPERATURE",
+        "POLARIZATION"
+      ],
+      "sha256": "830c1edee68c66f3a0545d1bb0202f1740d0eba1ba51bf8c589470029f8079f6",
+      "matches_original_native_file": true,
+      "matches_previous_temperature_window_through_LMAX": true
+    }
+  },
+  "native_pixel_windows_checked": 2,
+  "distinct_local_input_files_checked": 714,
+  "full_131_band_parameter_files_checked": 2,
+  "full_131_band_parameter_assignments_compared": 6646,
+  "implicit_working_directory_pixel_window_dependency_documented": true,
+  "working_directory_links_created_by_this_validation": false,
+  "deployment_allowed_native_pixel_window_files": 2,
+  "deployment_allowed_provenance_files": [
+    "pixel_window_provenance.json",
+    "manifest.json"
+  ],
+  "runtime_inputs_protected_from_filtered_parameter_only_deletion": [
+    "pixel_window_n0064.fits",
+    "pixel_window_n0128.fits",
+    "pixel_window_provenance.json",
+    "manifest.json"
+  ]
+}
